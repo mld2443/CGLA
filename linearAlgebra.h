@@ -88,9 +88,8 @@ namespace linalg {
     protected:
         // Accessor
         template <class SELF>
-        constexpr decltype(auto) get(this SELF&& self, std::size_t i) { return std::forward<SELF>(self).data[static_cast<std::ptrdiff_t>(i) * S]; }
+        constexpr decltype(auto) get(this SELF&& self, std::size_t i) { return *(std::forward<SELF>(self).data + static_cast<std::ptrdiff_t>(i) * S); }
     };
-
 
     // Value type that owns its own data
     template <std::ptrdiff_t, typename T, std::size_t... DIMS>
@@ -108,12 +107,12 @@ namespace linalg {
 
     // Reference-type that points to data (no ref counting!)
     //   These should be treated as transient, kinda like an r-value
-    template <std::ptrdiff_t, typename T, std::size_t... DIMS>
-    class ReferenceType : public StorageBase<1z, T, DIMS...> {
-        friend StorageBase<1z, T, DIMS...>;
+    template <std::ptrdiff_t S, typename T, std::size_t... DIMS>
+    class ReferenceType : public StorageBase<S, T, DIMS...> {
+        friend StorageBase<S, T, DIMS...>;
 
     public:
-        constexpr ReferenceType(T* origin, std::ptrdiff_t offset) : data(origin + offset) {}
+        constexpr ReferenceType(T* origin, std::ptrdiff_t offset = 0z) : data(origin + offset) {}
 
     protected:
         T* data;
@@ -157,26 +156,22 @@ namespace linalg {
 
         // Unsure why this can't be a lambda inside operator[] but both clang and GCC refuse to expand the packs for a lambda
         template <class SELF, std::size_t STEP, std::size_t NEXTDIM, std::size_t... RESTDIMS>
-        constexpr decltype(auto) getTensor(this SELF&& self, std::size_t offset, std::size_t nextInd, auto... restInds) {
+        constexpr decltype(auto) getTensor(this SELF&& self, std::ptrdiff_t offset, std::size_t nextInd, auto... restInds) {
             constexpr std::size_t THISSTEP = STEP / NEXTDIM;
             offset += THISSTEP * nextInd;
             if constexpr (sizeof...(restInds))
                 return std::forward<SELF>(self).template getTensor<SELF, THISSTEP, RESTDIMS...>(offset, restInds...);
             else if constexpr (sizeof...(RESTDIMS))
-                return Tensor<ReferenceType, S, COPYCONSTFORTYPE(SELF, T), RESTDIMS...>{std::forward<SELF>(self).data, static_cast<std::ptrdiff_t>(offset)};
+                return Tensor<ReferenceType, S, COPYCONSTFORTYPE(SELF, T), RESTDIMS...>{std::forward<SELF>(self).data, offset};
             else
-                return *(std::forward<SELF>(self).data + offset);
+                return *(std::forward<SELF>(self).data + offset * S);
         }
 
     public:
         // Accessor
         template <class SELF>
         constexpr decltype(auto) operator[](this SELF&& self, auto first, auto... inds) requires (sizeof...(inds) < sizeof...(DIMS)) {
-#ifdef __clang__
-            return std::forward<SELF>(self).template getTensor<SELF, (DIMS * ...), DIMS...>(0uz, static_cast<std::size_t>(first), static_cast<std::size_t>(inds)...);
-#else
-            return std::forward<SELF>(self).template getTensor<SELF, std::remove_reference_t<SELF>::COUNT, DIMS...>(0uz, static_cast<std::size_t>(first), static_cast<std::size_t>(inds)...);
-#endif
+            return std::forward<SELF>(self).template getTensor<SELF, std::remove_reference_t<SELF>::COUNT, DIMS...>(0z, static_cast<std::size_t>(first), static_cast<std::size_t>(inds)...);
         }
 
         template <STORAGECLASS STORAGETYPE2, std::ptrdiff_t S2, typename T2, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
@@ -193,11 +188,39 @@ namespace linalg {
     // 1-dimensional vector
     template <typename T, std::size_t N, STORAGECLASS STORAGETYPE = ValueType, std::ptrdiff_t S = 1z>
     class Vector : public Tensor<STORAGETYPE, S, T, N> {
+    private:
         using Tensor<STORAGETYPE, S, T, N>::Tensor;
+        template <typename TYPE>
+        using ReturnType = Vector<TYPE, N, ValueType, 1z>;
+
+        template <typename T2, STORAGECLASS OTHERSTORAGE, std::ptrdiff_t S2, std::size_t... IDX>
+        constexpr auto dotInternal(this const auto& self, const Vector<T2, N, OTHERSTORAGE, S2>& v, std::index_sequence<IDX...>) {
+            return ((self[IDX] * v[IDX]) + ...);
+        }
+
+    public:
+        // Geometric methods
+        template <typename T2, STORAGECLASS OTHERSTORAGE, std::ptrdiff_t S2>
+        constexpr T dot(const Vector<T2, N, OTHERSTORAGE, S2>& v) const { return dotInternal(v, MAKEINDICES(N)); }
+        constexpr T magnitudeSqr() const { return dot(*this);                }
+        constexpr T    magnitude() const { return std::sqrt(magnitudeSqr()); }
+        constexpr auto direction() const { return *this / magnitude();       }
+
+        // Cross product for 3-dimensional vectors
+        template <typename T2, STORAGECLASS OTHERSTORAGE, std::ptrdiff_t S2>
+        constexpr ReturnType<decltype(T()*T2())> cross(const Vector<T2, 3uz, OTHERSTORAGE, S2>& v) const {
+            return { (*this)[1uz]*v[2uz] - (*this)[2uz]*v[1uz],
+                     (*this)[2uz]*v[0uz] - (*this)[0uz]*v[2uz],
+                     (*this)[0uz]*v[1uz] - (*this)[1uz]*v[0uz] };
+        }
     };
     // Template deduction guide to automatically deduce N from initializer lists
     template <typename T, std::same_as<T>... Ts>
     Vector(T&&, Ts&&...) -> Vector<T, 1uz + sizeof...(Ts)>;
+
+    // Vector reference-type struct
+    template <typename T, std::size_t N, std::ptrdiff_t S = 1z>
+    using VectorRef = Vector<T, N, ReferenceType, S>;
 
     // 2-dimensional matrix
     template <typename T, std::size_t M, std::size_t N, STORAGECLASS STORAGETYPE = ValueType, std::ptrdiff_t S = 1z>

@@ -11,7 +11,7 @@ using linalg::Matrix;
 // MAIN //
 //////////
 int main() {
-    // Matrices
+    // // Matrices
     // constexpr auto m1 = Matrix{ { { 1.0, 0.0, 1.0, 0.0, 1.0 },
     //                               { 0.0, 1.0, 0.0, 1.0, 0.0 } } };
     // cout << m1 << endl;
@@ -117,26 +117,26 @@ int main() {
     // Vectors
     auto v1 = Vector{ 1.0, 2.0, 3.0 };
     cout << STR_EVAL(v1) << "\t<- a 'value-type' vector that owns its data." << endl;
-//
-//     float reallyLongArray[] = { -1.0f, -3.0f, 0.0f,   1.0f,
-//                                 4.2f,  3.9f,  -33.0f, 0.003f,
-//                                 14.0f, 0.0f,  0.0f,   22.0f };
-//     auto v2 = linalg::VectorRef<float, 3uz, -3z>(reallyLongArray, 8uz);
-//     //                          type   size stride                offset
-//
-//     cout << STR_EVAL(v2) << "\t<- a 'reference-type' vector that doesn't own.\nreallyLongArray=";
-//     for (const auto &e : reallyLongArray)
-//         cout << " " << e;
-//     cout << endl;
-//
-//     for (auto &e : v2)
-//         ++e;
-//
-//     cout << "incremented v2's elements.\nreallyLongArray=";
-//     for (const auto &e : reallyLongArray)
-//         cout << " " << e;
-//     cout << endl;
-//
+
+    float reallyLongArray[] = { -1.0f, -3.0f, 0.0f,   1.0f,
+                                4.2f,  3.9f,  -33.0f, 0.003f,
+                                14.0f, 0.0f,  0.0f,   22.0f };
+    auto v2 = linalg::VectorRef<float, 3uz, -3z>(reallyLongArray + 8uz);
+    //                          type   size stride                offset
+
+    cout << STR_EVAL(v2) << "\t<- a 'reference-type' vector that doesn't own.\nreallyLongArray=";
+    for (const auto &e : reallyLongArray)
+        cout << " " << e;
+    cout << endl;
+
+    for (auto &e : v2)
+        ++e;
+
+    cout << "incremented v2's elements.\nreallyLongArray=";
+    for (const auto &e : reallyLongArray)
+        cout << " " << e;
+    cout << endl;
+
 //     // Utilities showcase
 //     auto f1 = [](double a){ return a > 0.0; };
 //     auto f2 = [](bool a, bool b){ return a && b; };
