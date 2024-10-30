@@ -49,9 +49,10 @@ namespace linalg {
     // [x] Display arbitrary tensors
     // [ ] Matrix transpose(3)
     // [ ] Vector transpose -> Matrix(2)
-    // [ ] Tensor ops: scalar mult/div(1), negate(1), add(1), subtract(1), maybe inline mult/div(1)
+    // [ ] Shared ops: scalar mult/div(1), negate(1), add(1), subtract(1), maybe inline mult/div(1)
     // [ ] Matrix ops: invert(1), determinant(3), identity(1), rank(3), matrix mult (2)(add [[nodiscard]] attr) ...
     // [ ] Vector ops: dot (1), cross (1)
+    // [ ] Tensor ops: tensor product?!? (6?)
 
 
     // Helper macros to reduce clutter, undefined at end of namespace
@@ -185,9 +186,18 @@ namespace linalg {
     // Right-side operator overload
     template <STORAGECLASS STORAGETYPE, std::ptrdiff_t S, typename T, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
     constexpr std::ostream& operator<<(std::ostream& os, [[maybe_unused]] const Tensor<STORAGETYPE, S, T, FIRSTDIM, RESTDIMS...>& t) {
-        t.template prettyPrint<(RESTDIMS * ...), FIRSTDIM, RESTDIMS...>(os, MAKEINDICES(FIRSTDIM));
+        t.template prettyPrint<(RESTDIMS * ... * 1uz), FIRSTDIM, RESTDIMS...>(os, MAKEINDICES(FIRSTDIM));
         return os;
     }
+
+    // 1-dimensional vector
+    template <typename T, std::size_t N, STORAGECLASS STORAGETYPE = ValueType, std::ptrdiff_t S = 1z>
+    class Vector : public Tensor<STORAGETYPE, S, T, N> {
+        using Tensor<STORAGETYPE, S, T, N>::Tensor;
+    };
+    // Template deduction guide to automatically deduce N from initializer lists
+    template <typename T, std::same_as<T>... Ts>
+    Vector(T&&, Ts&&...) -> Vector<T, 1uz + sizeof...(Ts)>;
 
     // 2-dimensional matrix
     template <typename T, std::size_t M, std::size_t N, STORAGECLASS STORAGETYPE = ValueType, std::ptrdiff_t S = 1z>

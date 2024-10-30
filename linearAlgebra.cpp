@@ -1,7 +1,7 @@
 #include "linearAlgebra.h"
 
 using namespace std;
-//using linalg::Vector;
+using linalg::Vector;
 using linalg::Matrix;
 
 #define STR_EVAL(...) #__VA_ARGS__ "=> " << __VA_ARGS__
@@ -11,6 +11,21 @@ using linalg::Matrix;
 // MAIN //
 //////////
 int main() {
+    // Matrices
+    // constexpr auto m1 = Matrix{ { { 1.0, 0.0, 1.0, 0.0, 1.0 },
+    //                               { 0.0, 1.0, 0.0, 1.0, 0.0 } } };
+    // cout << m1 << endl;
+
+    // constexpr auto m2 = Matrix{ { { 1, 0, 1 },
+    //                               { 0, 1, 0 },
+    //                               { 1, 0, 1 },
+    //                               { 0, 1, 0 },
+    //                               { 1, 0, 1 } } };
+    // cout << "constexpr " LINE_EVAL(m2) << endl;
+
+    // constexpr auto m3 = m1 * m2;
+    // cout << "constexpr " LINE_EVAL(m3) << endl;
+
     // Massive 6-dimensional multilinear tensor
     [[maybe_unused]] constexpr auto tensor1 = linalg::Tensor<linalg::ValueType, 1z, int, 2uz, 3uz, 2uz, 3uz, 2uz, 3uz>{
           0,  1,  2,
@@ -93,82 +108,66 @@ int main() {
                     213,214,215,
     };
 
+    // Test for compile-time evaluation
+    static_assert(tensor1[0][2, 1, 0][0, 1] > 0);
     // cout << LINE_EVAL(tensor1) << endl;
+    // cout << STR_EVAL(sizeof(tensor1)) << endl;
+    // cout << STR_EVAL(tensor1[0, 2, 1, 0, 0, 1]) << ", " STR_EVAL(tensor1[0][2][1][0][0][1]) << endl;
 
-    cout << STR_EVAL(sizeof(tensor1)) << ", " STR_EVAL(tensor1) << endl;
-    cout << STR_EVAL(tensor1[0, 2, 1, 0, 0, 1]) << ", " STR_EVAL(tensor1[0][2][1][0][0][1]) << endl;
-    // Test for compile-time evaluation using array bounds
-    int emptyIntArray[tensor1[0][2, 1, 0][0, 1]] = {};
-    cout << STR_EVAL(sizeof(emptyIntArray)/sizeof(int)) << endl;
-
-    // Matrices
-    // constexpr auto m1 = Matrix{ { { 1.0, 0.0, 1.0, 0.0, 1.0 },
-    //                               { 0.0, 1.0, 0.0, 1.0, 0.0 } } };
-
-    // constexpr auto m2 = Matrix{ { { 1, 0, 1 },
-    //                               { 0, 1, 0 },
-    //                               { 1, 0, 1 },
-    //                               { 0, 1, 0 },
-    //                               { 1, 0, 1 } } };
-
-    // constexpr auto m3 = m1 * m2;
-
-    // cout << "constexpr " LINE_EVAL(m1) << "\n" "constexpr " LINE_EVAL(m2) /*<< "\n" "constexpr " LINE_EVAL(m3)*/ << endl;
-
-//    // Vectors
-//    auto v1 = Vector{ 1.0, 2.0, 3.0 };
-//    cout << STR_EVAL(v1) << "\t<- a 'value-type' vector that owns its data." << endl;
+    // Vectors
+    auto v1 = Vector{ 1.0, 2.0, 3.0 };
+    cout << STR_EVAL(v1) << "\t<- a 'value-type' vector that owns its data." << endl;
 //
-//    float reallyLongArray[] = { -1.0f, -3.0f, 0.0f,   1.0f,
-//                                4.2f,  3.9f,  -33.0f, 0.003f,
-//                                14.0f, 0.0f,  0.0f,   22.0f };
-//    auto v2 = linalg::VectorRef<float, 3uz, -3z>(reallyLongArray, 8uz);
-//    //                          type   size stride                offset
+//     float reallyLongArray[] = { -1.0f, -3.0f, 0.0f,   1.0f,
+//                                 4.2f,  3.9f,  -33.0f, 0.003f,
+//                                 14.0f, 0.0f,  0.0f,   22.0f };
+//     auto v2 = linalg::VectorRef<float, 3uz, -3z>(reallyLongArray, 8uz);
+//     //                          type   size stride                offset
 //
-//    cout << STR_EVAL(v2) << "\t<- a 'reference-type' vector that doesn't own.\nreallyLongArray=";
-//    for (const auto &e : reallyLongArray)
-//        cout << " " << e;
-//    cout << endl;
+//     cout << STR_EVAL(v2) << "\t<- a 'reference-type' vector that doesn't own.\nreallyLongArray=";
+//     for (const auto &e : reallyLongArray)
+//         cout << " " << e;
+//     cout << endl;
 //
-//    for (auto &e : v2)
-//        ++e;
+//     for (auto &e : v2)
+//         ++e;
 //
-//    cout << "incremented v2's elements.\nreallyLongArray=";
-//    for (const auto &e : reallyLongArray)
-//        cout << " " << e;
-//    cout << endl;
+//     cout << "incremented v2's elements.\nreallyLongArray=";
+//     for (const auto &e : reallyLongArray)
+//         cout << " " << e;
+//     cout << endl;
 //
-//    // Utilities showcase
-//    auto f1 = [](double a){ return a > 0.0; };
-//    auto f2 = [](bool a, bool b){ return a && b; };
-//    v2 -= v1;
-//    cout << "v2-=v1; " STR_EVAL(v2) << "\t" << STR_EVAL(v2*4u) << "\t" << STR_EVAL(v1 - v2) << "\t" STR_EVAL(v1.cross(v2)) << "\t" STR_EVAL(v1.map(f1).fold(f2, true)) << "\t" STR_EVAL(v1.direction()) << endl;
+//     // Utilities showcase
+//     auto f1 = [](double a){ return a > 0.0; };
+//     auto f2 = [](bool a, bool b){ return a && b; };
+//     v2 -= v1;
+//     cout << "v2-=v1; " STR_EVAL(v2) << "\t" << STR_EVAL(v2*4u) << "\t" << STR_EVAL(v1 - v2) << "\t" STR_EVAL(v1.cross(v2)) << "\t" STR_EVAL(v1.map(f1).fold(f2, true)) << "\t" STR_EVAL(v1.direction()) << endl;
 //
-//    // Matrices
-//    constexpr auto m1 = Matrix{ { { 1.0, 0.0, 1.0, 0.0, 1.0 },
-//                                  { 0.0, 1.0, 0.0, 1.0, 0.0 } } };
+//     // Matrices
+//     constexpr auto m1 = Matrix{ { { 1.0, 0.0, 1.0, 0.0, 1.0 },
+//                                   { 0.0, 1.0, 0.0, 1.0, 0.0 } } };
 //
-//    constexpr auto m2 = Matrix{ { { 1, 0, 1 },
-//                                  { 0, 1, 0 },
-//                                  { 1, 0, 1 },
-//                                  { 0, 1, 0 },
-//                                  { 1, 0, 1 } } };
+//     constexpr auto m2 = Matrix{ { { 1, 0, 1 },
+//                                   { 0, 1, 0 },
+//                                   { 1, 0, 1 },
+//                                   { 0, 1, 0 },
+//                                   { 1, 0, 1 } } };
 //
-//    constexpr auto m3 = m1 * m2;
+//     constexpr auto m3 = m1 * m2;
 //
-//    cout << "constexpr " LINE_EVAL(m1) << "\n" "constexpr " LINE_EVAL(m2) << "\n" "constexpr " LINE_EVAL(m3) << endl;
+//     cout << "constexpr " LINE_EVAL(m1) << "\n" "constexpr " LINE_EVAL(m2) << "\n" "constexpr " LINE_EVAL(m3) << endl;
 //
-//    // auto v4 = Vector{ 1.0, -1.0, -1.0, 0.5, 0.1 };
-//    // cout << LINE_EVAL(m1) << "\n" STR_EVAL(m1.getRow(1)) << "\n" STR_EVAL(m1.getCol(3)) << "\n" STR_EVAL(v4) << "\n" STR_EVAL(m1 * v4) << endl;
+//     // auto v4 = Vector{ 1.0, -1.0, -1.0, 0.5, 0.1 };
+//     // cout << LINE_EVAL(m1) << "\n" STR_EVAL(m1.getRow(1)) << "\n" STR_EVAL(m1.getCol(3)) << "\n" STR_EVAL(v4) << "\n" STR_EVAL(m1 * v4) << endl;
 //
-//    auto m5 = Matrix<unsigned, 5uz, 5uz>::I();
+//     auto m5 = Matrix<unsigned, 5uz, 5uz>::I();
 //
-//    m5.getRow(3uz) += Vector<uint32_t, 5uz>{ 4u };
-//    m5.getRow(0uz) = m5.getCol(4uz);
-//    m5.getDiagonal() *= 3u;
+//     m5.getRow(3uz) += Vector<uint32_t, 5uz>{ 4u };
+//     m5.getRow(0uz) = m5.getCol(4uz);
+//     m5.getDiagonal() *= 3u;
 //
-//    cout << LINE_EVAL(m5) << endl;
-//    cout << LINE_EVAL(m1 + m1) << endl;
+//     cout << LINE_EVAL(m5) << endl;
+//     cout << LINE_EVAL(m1 + m1) << endl;
 
     return 0;
 }
