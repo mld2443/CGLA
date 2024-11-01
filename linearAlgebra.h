@@ -50,6 +50,8 @@ namespace linalg {
     // [x] Vector ops: dot (x), cross (x)
     // [x] Rewrite Matrix and Vector as type aliases; clang 18 doesn't support template deductions for aliases
     // [x] Merge StorageBase features into Tensor and consider removing it(x)
+    // [x] Default initialization(x)
+    // [x] Rework "internal" functions into lambdas(x)
     // [ ] Merge recursive ValueType into Tensor(x) and ensure base functionality(1)
     // [ ] Matrix transpose(3)
     // [ ] Vector transpose -> Matrix(2)
@@ -67,30 +69,32 @@ namespace linalg {
     ///////////////////
 
     // Value type primary template
-    template <typename T, std::size_t PRODUCT, std::size_t DIM, std::size_t NEXT = 0uz, std::size_t... REST>
-    class ValueType : protected ValueType<T, PRODUCT * DIM, NEXT, REST...> {
-        using BASE = ValueType<T, PRODUCT * DIM, NEXT, REST...>;
+    template <typename T, std::size_t PRODUCT, std::size_t DIM = 0uz, std::size_t... REST>
+    class ValueType : private ValueType<T, PRODUCT * DIM, REST...> {
+        using BASE = ValueType<T, PRODUCT * DIM, REST...>;
     protected:
         using MYTYPE = typename BASE::MYTYPE[DIM];
+        using BASE::data;
 
     public:
         constexpr ValueType(MYTYPE&& payload) : BASE(std::forward<typename BASE::MYTYPE>(*payload)) {}
+        constexpr ValueType(auto&&... payload) : BASE(std::forward<T>(payload)...) {}
     };
 
-    // Value type base-case class
+    // Value type base-case class partial template specialization
     template <typename T, std::size_t COUNT>
-    class ValueType<T, COUNT, 0uz> {
+    class ValueType<T, COUNT> {
     protected:
         using MYTYPE = T;
 
     private:
         template <std::size_t... IDX>
-        constexpr ValueType(MYTYPE&& first, std::index_sequence<IDX...>&&) : data{ (&first)[IDX]... } {}
-
-    public:
-        constexpr ValueType(MYTYPE&& first) : ValueType<T, COUNT, 0uz>(std::forward<T>(first), std::make_index_sequence<COUNT>{}) {}
+        constexpr ValueType(MYTYPE *first, std::index_sequence<IDX...>&&) : data{ first[IDX]... } {}
 
     protected:
+        constexpr ValueType(MYTYPE&& first) : ValueType<T, COUNT>(&first, std::make_index_sequence<COUNT>{}) {}
+        constexpr ValueType(auto&&... payload) : data{std::forward<T>(payload)...} {}
+
         T data[COUNT];
     };
 
@@ -107,16 +111,31 @@ namespace linalg {
     ////////////
     // TENSOR //
     ////////////
-    template <STORAGECLASS STORAGETYPE, std::ptrdiff_t S, typename T, std::size_t... DIMS>
+
+    template <STORAGECLASS STORAGETYPE, std::ptrdiff_t STRIDE, typename T, std::size_t... DIMS>
+    class Tensor;
+
+    // Convenience aliases
+    template <typename T, std::size_t M, std::size_t N>
+    using Matrix = Tensor<ValueType, 1z, T, M, N>;
+    template <typename T, std::size_t M, std::size_t N, std::ptrdiff_t STRIDE = 1z>
+    using MatrixRef = Tensor<ReferenceType, STRIDE, T, M, N>;
+    template <typename T, std::size_t N>
+    using Vector = Tensor<ValueType, 1z, T, N>;
+    template <typename T, std::size_t N, std::ptrdiff_t STRIDE = 1z>
+    using VectorRef = Tensor<ReferenceType, STRIDE, T, N>;
+
+    // Tensor definition
+    template <STORAGECLASS STORAGETYPE, std::ptrdiff_t STRIDE, typename T, std::size_t... DIMS>
     class Tensor : private STORAGETYPE<T, 1uz, DIMS...> {
+    private:
         static constexpr std::size_t COUNT = (DIMS * ...);
-        template <STORAGECLASS STORAGETYPE2, std::ptrdiff_t S2, typename T2, std::size_t... DIMS2>
+        template <STORAGECLASS STORAGETYPE2, std::ptrdiff_t STRIDE2, typename T2, std::size_t... DIMS2>
         friend class Tensor;
 
-    private:
-        // Accessor
+        // Accessor addressing flat array of data, used internally to perform map
         template <class SELF>
-        constexpr decltype(auto) get(this SELF&& self, std::size_t i) { return *(std::forward<SELF>(self).data + static_cast<std::ptrdiff_t>(i) * S); }
+        constexpr decltype(auto) get(this SELF&& self, std::size_t i) { return *(std::forward<SELF>(self).data + static_cast<std::ptrdiff_t>(i) * STRIDE); }
 
         // Special 'template container' prettyPrint() uses to build compile-time c-strings
         template <char... STR>
@@ -139,7 +158,7 @@ namespace linalg {
                 (prettyPrint<STEP / NEXTDIM, NEXTDIM, RESTDIMS...>(os, MAKEINDICES(NEXTDIM), offset + IDX * STEP, String<PRFX...>{}), ...);
             else {
                 os << (offset ? "\n" : "") << prefix.VALUES;
-                ((os << (IDX ? ", " : "") << this->get(offset + IDX)), ...) << ((offset + THISDIM < COUNT) ? "," : "");
+                ((os << (IDX ? ", " : "") << get(offset + IDX)), ...) << ((offset + THISDIM < COUNT) ? "," : "");
             }
         }
 
@@ -151,30 +170,22 @@ namespace linalg {
             if constexpr (sizeof...(restInds))
                 return std::forward<SELF>(self).template getTensor<SELF, THISSTEP, RESTDIMS...>(offset, restInds...);
             else if constexpr (sizeof...(RESTDIMS))
-                return Tensor<ReferenceType, S, COPYCONSTFORTYPE(SELF, T), RESTDIMS...>{std::forward<SELF>(self).data, offset};
+                return Tensor<ReferenceType, STRIDE, COPYCONSTFORTYPE(SELF, T), RESTDIMS...>{std::forward<SELF>(self).data, offset};
             else
-                return *(std::forward<SELF>(self).data + offset * S);
+                return *(std::forward<SELF>(self).data + offset * STRIDE);
         }
 
-        template <std::size_t... IDX>
-        constexpr auto foldInternal(this const auto& self, auto& func, T starting, std::index_sequence<IDX...>) {
-            return ((starting = func(starting, self.get(IDX))), ...);
-        }
-        template <typename MYTYPE, std::size_t... IDX>
-        constexpr auto mapInternal(this const MYTYPE& self, auto func, std::index_sequence<IDX...>) {
-            return typename MYTYPE::template ReturnType<decltype(func(T()))>{ func(self.get(IDX))... };
-        }
-        template <typename MYTYPE, STORAGECLASS STORAGETYPE2, std::ptrdiff_t S2, typename T2, std::size_t... IDX>
-        constexpr auto binaryMapInternal(this const MYTYPE& self, auto func, const Tensor<STORAGETYPE2, S2, T2, DIMS...>& v, std::index_sequence<IDX...>) {
-            return typename MYTYPE::template ReturnType<decltype(func(T(), T2()))>{ func(self.get(IDX), v.get(IDX))... };
+        template <STORAGECLASS STORAGETYPE2, std::ptrdiff_t STRIDE2, typename T2, std::size_t... IDX>
+        constexpr auto binaryMapInternal(auto func, const Tensor<STORAGETYPE2, STRIDE2, T2, DIMS...>& v, std::index_sequence<IDX...>) const {
+            return Tensor<ValueType, 1z, decltype(func(T(), T2())), DIMS...>{ func(get(IDX), v.get(IDX))... };
         }
         template <std::size_t... IDX>
-        inline void mapWriteInternal(this auto& self, auto func, std::index_sequence<IDX...>) {
-            (func(self.get(IDX)), ...);
+        inline void mapWriteInternal(auto func, std::index_sequence<IDX...>) {
+            (func(get(IDX)), ...);
         }
         template <std::size_t... IDX>
-        inline void binaryMapWriteInternal(this auto& self, auto func, const auto& v, std::index_sequence<IDX...>) {
-            (func(self.get(IDX), v.get(IDX)), ...);
+        inline void binaryMapWriteInternal(auto func, const auto& v, std::index_sequence<IDX...>) {
+            (func(get(IDX), v.get(IDX)), ...);
         }
 
     public:
@@ -194,22 +205,35 @@ namespace linalg {
             constexpr Iterator(POINTERTYPE* p) : pos(p) {}
 
             constexpr decltype(auto)  operator*(this auto& self) { return *self.pos; }
-            constexpr decltype(auto) operator++(this auto& self) { self.pos += S; return self; }
+            constexpr decltype(auto) operator++(this auto& self) { self.pos += STRIDE; return self; }
             constexpr bool operator==(const Iterator& o) const = default;
         };
 
         // Iterator getters for for-each loops
         constexpr auto begin(this auto& self) { return Iterator<COPYCONSTFORTYPE(decltype(self), T)>{ self.data }; }
-        constexpr auto   end(this auto& self) { return Iterator<COPYCONSTFORTYPE(decltype(self), T)>{ self.data + static_cast<std::ptrdiff_t>(COUNT) * S }; }
+        constexpr auto   end(this auto& self) { return Iterator<COPYCONSTFORTYPE(decltype(self), T)>{ self.data + static_cast<std::ptrdiff_t>(COUNT) * STRIDE }; }
 
         // Functional programming support
-        constexpr auto fold(this const auto& self, auto func, T starting) { return self.foldInternal(func, starting, MAKEINDICES(COUNT)); }
-        constexpr auto map(this const auto& self, auto func) { return self.mapInternal(func, MAKEINDICES(COUNT)); }
+        constexpr auto reduce(auto func, auto starting) const {
+            return [this]<std::size_t... IDX>(auto& func, auto starting, std::index_sequence<IDX...>) constexpr {
+                return ((starting = func(starting, get(IDX))), ...);
+            }(func, starting, MAKEINDICES(COUNT));
+        }
+        constexpr auto reduce(auto func) const {
+            return [this]<std::size_t... IDX>(auto& func, T starting, std::index_sequence<IDX...>) constexpr {
+                return ((starting = func(starting, get(1uz + IDX))), ...);
+            }(func, get(0uz), MAKEINDICES(COUNT - 1uz));
+        }
+        constexpr auto map(auto func) const {
+            return [this]<std::size_t... IDX>(auto func, std::index_sequence<IDX...>) constexpr {
+                return Tensor<ValueType, 1z, decltype(func(T())), DIMS...>{ func(get(IDX))... };
+            }(func, MAKEINDICES(COUNT));
+        }
 
         // Member operator overloads
-        constexpr auto operator-(this const auto& self)                { return self.map([  ](const T& e){ return    -e; }); }
-        constexpr auto operator*(this const auto& self, const auto& s) { return self.map([&s](const T& e){ return e * s; }); }
-        constexpr auto operator/(this const auto& self, const auto& s) { return self.map([&s](const T& e){ return e / s; }); }
+        constexpr auto operator-()              const { return map([  ](const T& e){ return    -e; }); }
+        constexpr auto operator*(const auto& s) const { return map([&s](const T& e){ return e * s; }); }
+        constexpr auto operator/(const auto& s) const { return map([&s](const T& e){ return e / s; }); }
 
         // Accessor
         template <class SELF>
@@ -218,32 +242,56 @@ namespace linalg {
         }
 
         // Member operator overloads
-        template <STORAGECLASS OTHERSTORAGE, std::ptrdiff_t S2, typename T2>
-        constexpr auto operator+(this const auto& self, const Tensor<OTHERSTORAGE, S2, T2, DIMS...>& t) { return self.binaryMapInternal([](const T& e1, const T2& e2){ return e1 + e2; }, t, MAKEINDICES(COUNT)); }
-        template <STORAGECLASS OTHERSTORAGE, std::ptrdiff_t S2, typename T2>
-        constexpr auto operator-(this const auto& self, const Tensor<OTHERSTORAGE, S2, T2, DIMS...>& t) { return self.binaryMapInternal([](const T& e1, const T2& e2){ return e1 - e2; }, t, MAKEINDICES(COUNT)); }
+        template <STORAGECLASS OTHERSTORAGE, std::ptrdiff_t STRIDE2, typename T2>
+        constexpr auto operator+(const Tensor<OTHERSTORAGE, STRIDE2, T2, DIMS...>& t) const { return binaryMapInternal([](const T& e1, const T2& e2){ return e1 + e2; }, t, MAKEINDICES(COUNT)); }
+        template <STORAGECLASS OTHERSTORAGE, std::ptrdiff_t STRIDE2, typename T2>
+        constexpr auto operator-(const Tensor<OTHERSTORAGE, STRIDE2, T2, DIMS...>& t) const { return binaryMapInternal([](const T& e1, const T2& e2){ return e1 - e2; }, t, MAKEINDICES(COUNT)); }
 
         // Mutating operators
         inline auto& operator*=(const auto& s) { this->mapWriteInternal([&s](T& e){ e *= s; }, MAKEINDICES(COUNT)); return *this; }
         inline auto& operator/=(const auto& s) { this->mapWriteInternal([&s](T& e){ e /= s; }, MAKEINDICES(COUNT)); return *this; }
-        template <STORAGECLASS OTHERSTORAGE, std::ptrdiff_t S2, typename T2>
-        inline auto& operator+=(const Tensor<OTHERSTORAGE, S2, T2, DIMS...>& t) { this->binaryMapWriteInternal([](T& e1, const T2& e2){ e1 += e2; }, t, MAKEINDICES(COUNT)); return *this; }
-        template <STORAGECLASS OTHERSTORAGE, std::ptrdiff_t S2, typename T2>
-        inline auto& operator-=(const Tensor<OTHERSTORAGE, S2, T2, DIMS...>& t) { this->binaryMapWriteInternal([](T& e1, const T2& e2){ e1 -= e2; }, t, MAKEINDICES(COUNT)); return *this; }
-        template <STORAGECLASS OTHERSTORAGE, std::ptrdiff_t S2, typename T2>
-        inline auto&  operator=(const Tensor<OTHERSTORAGE, S2, T2, DIMS...>& t) { this->binaryMapWriteInternal([](T& e1, const T2& e2){ e1  = e2; }, t, MAKEINDICES(COUNT)); return *this; }
+        template <STORAGECLASS OTHERSTORAGE, std::ptrdiff_t STRIDE2, typename T2>
+        inline auto& operator+=(const Tensor<OTHERSTORAGE, STRIDE2, T2, DIMS...>& t) { this->binaryMapWriteInternal([](T& e1, const T2& e2){ e1 += e2; }, t, MAKEINDICES(COUNT)); return *this; }
+        template <STORAGECLASS OTHERSTORAGE, std::ptrdiff_t STRIDE2, typename T2>
+        inline auto& operator-=(const Tensor<OTHERSTORAGE, STRIDE2, T2, DIMS...>& t) { this->binaryMapWriteInternal([](T& e1, const T2& e2){ e1 -= e2; }, t, MAKEINDICES(COUNT)); return *this; }
+        template <STORAGECLASS OTHERSTORAGE, std::ptrdiff_t STRIDE2, typename T2>
+        inline auto&  operator=(const Tensor<OTHERSTORAGE, STRIDE2, T2, DIMS...>& t) { this->binaryMapWriteInternal([](T& e1, const T2& e2){ e1  = e2; }, t, MAKEINDICES(COUNT)); return *this; }
 
-        template <STORAGECLASS STORAGETYPE2, std::ptrdiff_t S2, typename T2, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
-        friend constexpr std::ostream& operator<<(std::ostream& os, const Tensor<STORAGETYPE2, S2, T2, FIRSTDIM, RESTDIMS...>& t);
+        template <STORAGECLASS STORAGETYPE2, std::ptrdiff_t STRIDE2, typename T2, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
+        friend constexpr std::ostream& operator<<(std::ostream& os, const Tensor<STORAGETYPE2, STRIDE2, T2, FIRSTDIM, RESTDIMS...>& t);
+
+        /////////////////////
+        // SPECIALIZATIONS //
+        /////////////////////
+
+        // Vector Geometric methods
+
+        template <STORAGECLASS OTHERSTORAGE, std::ptrdiff_t STRIDE2, typename T2> requires(sizeof...(DIMS) == 1uz)
+        constexpr T dot(this const Tensor<STORAGETYPE, STRIDE, T, COUNT>& self, const Tensor<OTHERSTORAGE, STRIDE2, T2, COUNT>& v) {
+            return []<std::size_t... IDX>(const auto& v1, const auto& v2, std::index_sequence<IDX...>) constexpr {
+                return ((v1[IDX] * v2[IDX]) + ...);
+            }(self, v, MAKEINDICES(COUNT));
+        }
+        constexpr T magnitudeSqr(this const Tensor<STORAGETYPE, STRIDE, T, COUNT>& self) { return self.dot(self);                 }
+        constexpr T    magnitude(this const Tensor<STORAGETYPE, STRIDE, T, COUNT>& self) { return std::sqrt(self.magnitudeSqr()); }
+        constexpr auto direction(this const Tensor<STORAGETYPE, STRIDE, T, COUNT>& self) { return self / self.magnitude();        }
+
+        // Vector Cross product for length 3 vectors
+        template <STORAGECLASS OTHERSTORAGE, std::ptrdiff_t STRIDE2, typename T2> requires(sizeof...(DIMS) == 1uz, COUNT == 3uz)
+        constexpr Tensor<ValueType, 1z, decltype(T()*T2()), 3uz> cross(this const Tensor<STORAGETYPE, STRIDE, T, 3uz>& self, const Tensor<OTHERSTORAGE, STRIDE2, T2, 3uz>& v) {
+            return { self[1uz]*v[2uz] - self[2uz]*v[1uz],
+                     self[2uz]*v[0uz] - self[0uz]*v[2uz],
+                     self[0uz]*v[1uz] - self[1uz]*v[0uz] };
+        }
     };
 
-    // Right-side operator overload friends
-    template <STORAGECLASS STORAGETYPE, std::ptrdiff_t S, typename T, std::size_t... DIMS>
-    constexpr auto operator*(const T& s, const Tensor<STORAGETYPE, S, T, DIMS...> &t) { return t.map([&s](const T& e) { return e * s; }); }
-    template <STORAGECLASS STORAGETYPE, std::ptrdiff_t S, typename T, std::size_t... DIMS>
-    constexpr auto operator/(const T& s, const Tensor<STORAGETYPE, S, T, DIMS...> &t) { return t.map([&s](const T& e) { return e / s; }); }
-    template <STORAGECLASS STORAGETYPE, std::ptrdiff_t S, typename T, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
-    constexpr std::ostream& operator<<(std::ostream& os, const Tensor<STORAGETYPE, S, T, FIRSTDIM, RESTDIMS...>& t) {
+    // Right-side operator overloads
+    template <STORAGECLASS STORAGETYPE, std::ptrdiff_t STRIDE, typename T, std::size_t... DIMS>
+    constexpr auto operator*(const T& s, const Tensor<STORAGETYPE, STRIDE, T, DIMS...> &t) { return t.map([&s](const T& e) { return e * s; }); }
+    template <STORAGECLASS STORAGETYPE, std::ptrdiff_t STRIDE, typename T, std::size_t... DIMS>
+    constexpr auto operator/(const T& s, const Tensor<STORAGETYPE, STRIDE, T, DIMS...> &t) { return t.map([&s](const T& e) { return e / s; }); }
+    template <STORAGECLASS STORAGETYPE, std::ptrdiff_t STRIDE, typename T, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
+    constexpr std::ostream& operator<<(std::ostream& os, const Tensor<STORAGETYPE, STRIDE, T, FIRSTDIM, RESTDIMS...>& t) {
         t.template prettyPrint<(RESTDIMS * ... * 1uz), FIRSTDIM, RESTDIMS...>(os, MAKEINDICES(FIRSTDIM));
         return os;
     }
@@ -270,12 +318,6 @@ namespace linalg {
     Tensor(T (&&)[D0][D1][D2][D3][D4][D5][D6][D7][D8]) -> Tensor<ValueType, 1z, T, D0, D1, D2, D3, D4, D5, D6, D7, D8>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3, std::size_t D4, std::size_t D5, std::size_t D6, std::size_t D7, std::size_t D8, std::size_t D9>
     Tensor(T (&&)[D0][D1][D2][D3][D4][D5][D6][D7][D8][D9]) -> Tensor<ValueType, 1z, T, D0, D1, D2, D3, D4, D5, D6, D7, D8, D9>;
-
-    // Convenience aliases
-    template <typename T, std::size_t M, std::size_t N, STORAGECLASS STORAGETYPE = ValueType, std::ptrdiff_t S = 1z>
-    using Matrix = Tensor<STORAGETYPE, S, T, M, N>;
-    template <typename T, std::size_t N, STORAGECLASS STORAGETYPE = ValueType, std::ptrdiff_t S = 1z>
-    using Vector = Tensor<STORAGETYPE, S, T, N>;
 
     #undef COPYCONSTFORTYPE
     #undef STORAGECLASS
