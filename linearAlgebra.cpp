@@ -11,16 +11,16 @@ using linalg::Matrix;
 // MAIN //
 //////////
 int main() {
-    // // Matrices
-    // constexpr auto m1 = Matrix{ { { 1.0, 0.0, 1.0, 0.0, 1.0 },
-    //                               { 0.0, 1.0, 0.0, 1.0, 0.0 } } };
-    // cout << m1 << endl;
-    // constexpr auto m2 = Matrix{ { { 1, 0, 1 },
-    //                               { 0, 1, 0 },
-    //                               { 1, 0, 1 },
-    //                               { 0, 1, 0 },
-    //                               { 1, 0, 1 } } };
-    // cout << m2 << endl;
+    // Matrices
+    constexpr auto m1 = Matrix{ { { 1.0, 0.0, 1.0, 0.0, 1.0 },
+                                  { 0.0, 1.0, 0.0, 1.0, 0.0 } } };
+    cout << m1 << endl;
+    constexpr auto m2 = Matrix{ { { 1, 0, 1 },
+                                  { 0, 1, 0 },
+                                  { 1, 0, 1 },
+                                  { 0, 1, 0 },
+                                  { 1, 0, 1 } } };
+    cout << m2 << endl;
     // constexpr auto m3 = m1 * m2;
     // cout << "constexpr " LINE_EVAL(m3) << endl;
 
