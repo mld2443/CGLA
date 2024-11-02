@@ -35,7 +35,7 @@
 #endif
 
 #include <cmath>       // sqrt
-#include <concepts>    // same_as, convertible_to
+#include <concepts>    // same_as
 #include <cstddef>     // size_t, ptrdiff_t
 #include <iostream>    // ostream
 #include <type_traits> // conditional_t, is_const_v, remove_reference_t
@@ -89,7 +89,7 @@ namespace linalg {
 
     private:
         template <std::size_t... IDX>
-        constexpr ValueType(std::index_sequence<IDX...>&&, MYTYPE* first) : data{ first[IDX]... } {}
+        constexpr ValueType(std::index_sequence<IDX...>&&, MYTYPE* first) : data{ first[IDX]... } {} // clang reports past-the-end deref illegal for constexpr
 
     protected:
         constexpr ValueType(MYTYPE&& first) : ValueType<T, COUNT>(MAKEINDICES(COUNT), &first) {}
@@ -99,7 +99,7 @@ namespace linalg {
     };
 
     // Reference type, transient type with no ref counting
-    template <typename T, std::size_t, std::size_t... DIMS>
+    template <typename T, std::size_t, std::size_t...>
     class ReferenceType {
     public:
         constexpr ReferenceType(T* origin) : data(origin) {}
@@ -179,17 +179,18 @@ namespace linalg {
         // Constructors
         using STORAGETYPE<T, 1uz, DIMS...>::STORAGETYPE;
 
+        // Metadata
         constexpr std::size_t count()          const { return COUNT; }
         constexpr std::size_t dimensionality() const { return sizeof...(DIMS); }
 
         // Iterator type for for-each loops
-        template <typename POINTERTYPE>
+        template <typename QUALIFIEDTYPE>
         class Iterator {
         private:
-            POINTERTYPE* pos;
+            QUALIFIEDTYPE* pos;
 
         public:
-            constexpr Iterator(POINTERTYPE* p) : pos(p) {}
+            constexpr Iterator(QUALIFIEDTYPE* p) : pos(p) {}
 
             constexpr decltype(auto)  operator*(this auto& self) { return *self.pos; }
             constexpr decltype(auto) operator++(this auto& self) { self.pos += STRIDE; return self; }
@@ -198,7 +199,7 @@ namespace linalg {
 
         // Iterator getters for for-each loops
         constexpr auto begin(this auto& self) { return Iterator<COPYCONSTFORTYPE(decltype(self), T)>{ self.data }; }
-        constexpr auto   end(this auto& self) { return Iterator<COPYCONSTFORTYPE(decltype(self), T)>{ self.data + static_cast<std::ptrdiff_t>(COUNT) * STRIDE }; }
+        constexpr auto   end(this auto& self) { return Iterator<COPYCONSTFORTYPE(decltype(self), T)>{ self.data + static_cast<std::ptrdiff_t>(COUNT) * STRIDE }; } // gcc warns if '*end()' would be OOB, even when it isn't dereffed
 
         // Functional programming support
         constexpr auto reduce(auto func, auto starting) const {
@@ -227,13 +228,20 @@ namespace linalg {
         constexpr decltype(auto) operator[](this SELF&& self, auto first, auto... inds) requires (sizeof...(inds) < sizeof...(DIMS)) {
             return []<std::size_t STEP, std::size_t NEXTDIM, std::size_t... RESTDIMS>(this auto getTensor, SELF&& self, std::ptrdiff_t offset, auto nextInd, auto... restInds) constexpr {
                 constexpr std::size_t THISSTEP = STEP / NEXTDIM;
-                offset += THISSTEP * static_cast<std::size_t>(nextInd);
-                if constexpr (sizeof...(restInds))
-                    return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<SELF>(self), offset, restInds...);
-                else if constexpr (sizeof...(RESTDIMS))
-                    return Tensor<ReferenceType, STRIDE, COPYCONSTFORTYPE(SELF, T), RESTDIMS...>{ std::forward<SELF>(self).data + offset };
-                else
-                    return *(std::forward<SELF>(self).data + offset * STRIDE);
+                if constexpr (std::is_same_v<decltype(nextInd), char>) { // nextInd is a wildcard
+                    if constexpr (sizeof...(restInds))      // there are more indices after this wildcard
+                        return 666;
+                    else                                    // trailing wildcards do nothing
+                        return std::forward<SELF>(self);
+                } else {
+                    offset += THISSTEP * static_cast<std::size_t>(nextInd);
+                    if constexpr (sizeof...(restInds))      // more constraints to get through
+                        return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<SELF>(self), offset, restInds...);
+                    else if constexpr (sizeof...(RESTDIMS)) // there are unconstrained dimensions
+                        return Tensor<ReferenceType, STRIDE, COPYCONSTFORTYPE(SELF, T), RESTDIMS...>{ std::forward<SELF>(self).data + offset };
+                    else                                    // the final dimension is constrained, return the value
+                        return *(std::forward<SELF>(self).data + offset * STRIDE);
+                }
             }.template operator()<COUNT, DIMS...>(std::forward<SELF>(self), 0z, first, inds...);
         }
 
@@ -272,7 +280,6 @@ namespace linalg {
         constexpr T    magnitude(this const Tensor<STORAGETYPE, STRIDE, T, COUNT>& self) { return std::sqrt(self.magnitudeSqr()); }
         constexpr auto direction(this const Tensor<STORAGETYPE, STRIDE, T, COUNT>& self) { return self / self.magnitude();        }
 
-        // Vector Cross product for length 3 vectors
         template <STORAGECLASS OTHERSTORAGE, std::ptrdiff_t STRIDE2, typename T2> requires(sizeof...(DIMS) == 1uz, COUNT == 3uz)
         constexpr Tensor<ValueType, 1z, decltype(T()*T2()), 3uz> cross(this const Tensor<STORAGETYPE, STRIDE, T, 3uz>& self, const Tensor<OTHERSTORAGE, STRIDE2, T2, 3uz>& v) {
             return { self[1uz]*v[2uz] - self[2uz]*v[1uz],
