@@ -52,9 +52,9 @@ namespace linalg {
     // [x] Merge StorageBase features into Tensor and consider removing it(x)
     // [x] Default initialization(x)
     // [x] Rework "internal" functions into lambdas(x)
-    // [ ] Merge recursive ValueType into Tensor(x) and ensure base functionality(1)
-    // [ ] Matrix transpose(3)
-    // [ ] Vector transpose -> Matrix(2)
+    // [x] Merge recursive ValueType into Tensor(x) and ensure base functionality(x)
+    // [ ] Matrix transpose(4)
+    // [ ] Vector transpose -> Matrix(1)
     // [ ] Matrix ops: matrix mult (2)(add [[nodiscard]] attr), eigenvector/value(3), determinant(3), invert(1), identity(1), rank(3), ...
     // [ ] Tensor ops: tensor product?(?)
 
@@ -89,11 +89,11 @@ namespace linalg {
 
     private:
         template <std::size_t... IDX>
-        constexpr ValueType(MYTYPE *first, std::index_sequence<IDX...>&&) : data{ first[IDX]... } {}
+        constexpr ValueType(std::index_sequence<IDX...>&&, MYTYPE* first) : data{ first[IDX]... } {}
 
     protected:
-        constexpr ValueType(MYTYPE&& first) : ValueType<T, COUNT>(&first, std::make_index_sequence<COUNT>{}) {}
-        constexpr ValueType(auto&&... payload) : data{std::forward<T>(payload)...} {}
+        constexpr ValueType(MYTYPE&& first) : ValueType<T, COUNT>(MAKEINDICES(COUNT), &first) {}
+        constexpr ValueType(auto&&... payload) : data{ std::forward<T>(payload)... } {}
 
         T data[COUNT];
     };
@@ -162,19 +162,6 @@ namespace linalg {
             }
         }
 
-        // Helper for operator[]
-        template <class SELF, std::size_t STEP, std::size_t NEXTDIM, std::size_t... RESTDIMS>
-        constexpr decltype(auto) getTensor(this SELF&& self, std::ptrdiff_t offset, auto nextInd, auto... restInds) {
-            constexpr std::size_t THISSTEP = STEP / NEXTDIM;
-            offset += THISSTEP * static_cast<std::size_t>(nextInd);
-            if constexpr (sizeof...(restInds))
-                return std::forward<SELF>(self).template getTensor<SELF, THISSTEP, RESTDIMS...>(offset, restInds...);
-            else if constexpr (sizeof...(RESTDIMS))
-                return Tensor<ReferenceType, STRIDE, COPYCONSTFORTYPE(SELF, T), RESTDIMS...>{std::forward<SELF>(self).data, offset};
-            else
-                return *(std::forward<SELF>(self).data + offset * STRIDE);
-        }
-
         template <STORAGECLASS STORAGETYPE2, std::ptrdiff_t STRIDE2, typename T2, std::size_t... IDX>
         constexpr auto binaryMapInternal(auto func, const Tensor<STORAGETYPE2, STRIDE2, T2, DIMS...>& v, std::index_sequence<IDX...>) const {
             return Tensor<ValueType, 1z, decltype(func(T(), T2())), DIMS...>{ func(get(IDX), v.get(IDX))... };
@@ -238,7 +225,16 @@ namespace linalg {
         // Accessor
         template <class SELF>
         constexpr decltype(auto) operator[](this SELF&& self, auto first, auto... inds) requires (sizeof...(inds) < sizeof...(DIMS)) {
-            return std::forward<SELF>(self).template getTensor<SELF, COUNT, DIMS...>(0z, first, inds...);
+            return []<std::size_t STEP, std::size_t NEXTDIM, std::size_t... RESTDIMS>(this auto getTensor, SELF&& self, std::ptrdiff_t offset, auto nextInd, auto... restInds) constexpr {
+                constexpr std::size_t THISSTEP = STEP / NEXTDIM;
+                offset += THISSTEP * static_cast<std::size_t>(nextInd);
+                if constexpr (sizeof...(restInds))
+                    return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<SELF>(self), offset, restInds...);
+                else if constexpr (sizeof...(RESTDIMS))
+                    return Tensor<ReferenceType, STRIDE, COPYCONSTFORTYPE(SELF, T), RESTDIMS...>{ std::forward<SELF>(self).data + offset };
+                else
+                    return *(std::forward<SELF>(self).data + offset * STRIDE);
+            }.template operator()<COUNT, DIMS...>(std::forward<SELF>(self), 0z, first, inds...);
         }
 
         // Member operator overloads

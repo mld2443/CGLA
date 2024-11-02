@@ -40,13 +40,13 @@ void testVectors() {
 
 void testMatrices() {
     constexpr auto m1 = Matrix<double, 2uz, 5uz>{ { { 1.0, 0.0, 1.0, 0.0, 1.0 },
-                                  { 0.0, 1.0, 0.0, 1.0, 0.0 } } };
+                                                    { 0.0, 1.0, 0.0, 1.0, 0.0 } } };
     cout << m1 << endl;
     constexpr auto m2 = Matrix<float, 5uz, 3uz>{ { { 1, 0, 1 },
-                                  { 0, 1, 0 },
-                                  { 1, 0, 1 },
-                                  { 0, 1, 0 },
-                                  { 1, 0, 1 } } };
+                                                   { 0, 1, 0 },
+                                                   { 1, 0, 1 },
+                                                   { 0, 1, 0 },
+                                                   { 1, 0, 1 } } };
     cout << m2 << endl;
     // constexpr auto m3 = m1 * m2;
     // cout << "constexpr " LINE_EVAL(m3) << endl;
@@ -146,19 +146,17 @@ void testTensors() {
     };
 
     // Test for compile-time evaluation
-    // static_assert(tensor1[0][2, 1, 0][0, 1] > 0);
-    // cout << LINE_EVAL(tensor1) << endl;
-    // cout << STR_EVAL(sizeof(tensor1)) << endl;
-    // cout << STR_EVAL(tensor1[0, 2, 1, 0, 0, 1]) << ", " STR_EVAL(tensor1[0][2][1][0][0][1]) << endl;
+    static_assert(tensor1[0][2, 1, 0][0, 1] > 0);
+    cout << LINE_EVAL(tensor1) << "\n\n" STR_EVAL(sizeof(tensor1)) << "\n" STR_EVAL(tensor1[0, 2, 1, 0, 0, 1]) << "\n" STR_EVAL(tensor1[0][2][1][0][0][1]) << endl;
 }
 
 //////////
 // MAIN //
 //////////
 int main() {
-    testVectors();
+    //testVectors();
     // testMatrices();
-    // testTensors();
+    testTensors();
 
     return 0;
 }
