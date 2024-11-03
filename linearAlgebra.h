@@ -162,12 +162,12 @@ namespace linalg {
     // Convenience aliases
     template <typename T, std::size_t... DIMS>
     using Tensor = TensorType<ValueType<T, DIMS...>, T, DIMS...>;
-    template <typename T, std::size_t M, std::size_t N>
-    using Matrix = TensorType<ValueType<T, M, N>, T, M, N>;
+    template <typename T, std::size_t M, std::size_t N, class StorageType = ValueType<T, M, N>>
+    using Matrix = TensorType<StorageType, T, M, N>;
     template <typename T, std::size_t M, std::size_t N, std::ptrdiff_t STRIDE = 1z>
     using MatrixRef = TensorType<ReferenceType<T, M * N, STRIDE>, T, M, N>;
-    template <typename T, std::size_t N>
-    using Vector = TensorType<ValueType<T, N>, T, N>;
+    template <typename T, std::size_t N, class StorageType = ValueType<T, N>>
+    using Vector = TensorType<StorageType, T, N>;
     template <typename T, std::size_t N, std::ptrdiff_t STRIDE = 1z>
     using VectorRef = TensorType<ReferenceType<T, N, STRIDE>, T, N>;
 
@@ -268,6 +268,10 @@ namespace linalg {
         constexpr auto operator-()              const { return map([  ](const T& e){ return    -e; }); }
         constexpr auto operator*(const auto& s) const { return map([&s](const T& e){ return e * s; }); }
         constexpr auto operator/(const auto& s) const { return map([&s](const T& e){ return e / s; }); }
+        template <class OtherBase, typename T2>
+        constexpr auto operator+(const TensorType<OtherBase, T2, DIMS...>& t) const { return binaryMapInternal([](const T& e1, const T2& e2){ return e1 + e2; }, t, MAKEINDICES(COUNT)); }
+        template <class OtherBase, typename T2>
+        constexpr auto operator-(const TensorType<OtherBase, T2, DIMS...>& t) const { return binaryMapInternal([](const T& e1, const T2& e2){ return e1 - e2; }, t, MAKEINDICES(COUNT)); }
 
         // Accessor
         template <class Self>
@@ -291,12 +295,6 @@ namespace linalg {
             }.template operator()<COUNT, DIMS...>(std::forward<Self>(self), 0z, first, inds...);
         }
 
-        // Member operator overloads
-        template <class OtherBase, typename T2>
-        constexpr auto operator+(const TensorType<OtherBase, T2, DIMS...>& t) const { return binaryMapInternal([](const T& e1, const T2& e2){ return e1 + e2; }, t, MAKEINDICES(COUNT)); }
-        template <class OtherBase, typename T2>
-        constexpr auto operator-(const TensorType<OtherBase, T2, DIMS...>& t) const { return binaryMapInternal([](const T& e1, const T2& e2){ return e1 - e2; }, t, MAKEINDICES(COUNT)); }
-
         // Mutating operators
         inline auto& operator*=(const auto& s) { this->mapWriteInternal([&s](T& e){ e *= s; }, MAKEINDICES(COUNT)); return *this; }
         inline auto& operator/=(const auto& s) { this->mapWriteInternal([&s](T& e){ e /= s; }, MAKEINDICES(COUNT)); return *this; }
@@ -316,18 +314,18 @@ namespace linalg {
 
         // Vector Geometric methods
 
-        template <class OtherBase, typename T2> requires(sizeof...(DIMS) == 1uz)
-        constexpr T dot(this const TensorType<StorageBase, T, COUNT>& self, const TensorType<OtherBase, T2, COUNT>& v) {
+        template <typename T2, class OtherBase>
+        constexpr auto dot(this const Vector<T, COUNT, StorageBase>& self, const Vector<T2, COUNT, OtherBase>& v) {
             return []<std::size_t... IDX>(const auto& v1, const auto& v2, std::index_sequence<IDX...>) constexpr {
                 return ((v1[IDX] * v2[IDX]) + ...);
             }(self, v, MAKEINDICES(COUNT));
         }
-        constexpr T magnitudeSqr(this const TensorType<StorageBase, T, COUNT>& self) { return self.dot(self);                 }
-        constexpr T    magnitude(this const TensorType<StorageBase, T, COUNT>& self) { return std::sqrt(self.magnitudeSqr()); }
-        constexpr auto direction(this const TensorType<StorageBase, T, COUNT>& self) { return self / self.magnitude();        }
+        constexpr T magnitudeSqr(this const Vector<T, COUNT, StorageBase>& self) { return self.dot(self);                 }
+        constexpr T    magnitude(this const Vector<T, COUNT, StorageBase>& self) { return std::sqrt(self.magnitudeSqr()); }
+        constexpr auto direction(this const Vector<T, COUNT, StorageBase>& self) { return self / self.magnitude();        }
 
-        template <class OtherBase, typename T2> requires(sizeof...(DIMS) == 1uz, COUNT == 3uz)
-        constexpr TensorType<ValueType<T, 3uz>, decltype(T()*T2()), 3uz> cross(this const TensorType<StorageBase, T, 3uz>& self, const TensorType<OtherBase, T2, 3uz>& v) {
+        template <typename T2, class OtherBase>
+        constexpr Vector<decltype(T()*T2()), 3uz> cross(this const Vector<T, 3uz, StorageBase>& self, const Vector<T2, 3uz, OtherBase>& v) {
             return { self[1uz]*v[2uz] - self[2uz]*v[1uz],
                      self[2uz]*v[0uz] - self[0uz]*v[2uz],
                      self[0uz]*v[1uz] - self[1uz]*v[0uz] };
