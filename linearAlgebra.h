@@ -53,6 +53,7 @@ namespace linalg {
     // [x] Default initialization(x)
     // [x] Rework "internal" functions into lambdas(x)
     // [x] Merge recursive ValueType into Tensor(x) and ensure base functionality(x)
+    // [ ] Slicing using the operator[] with a wildcard(4)
     // [ ] Matrix transpose(4)
     // [ ] Vector transpose -> Matrix(1)
     // [ ] Matrix ops: matrix mult (2)(add [[nodiscard]] attr), eigenvector/value(3), determinant(3), invert(1), identity(1), rank(3), ...
@@ -131,9 +132,9 @@ namespace linalg {
         constexpr auto   end(this auto& self) { return Iterator<COPYCONSTFORTYPE(decltype(self), T)>{ self.data + COUNT }; } // gcc warns if '*end()' would be OOB, even when it isn't dereffed
     };
 
-    // Reference type, transient type with no ref counting
+    // Simple pointer type, takes user-supplied pointer and optional stride
     template <typename T, std::size_t C, std::ptrdiff_t STRIDE = 1z>
-    struct ReferenceType {
+    struct PointerType {
     protected:
         static constexpr std::size_t COUNT = C;
 
@@ -146,11 +147,14 @@ namespace linalg {
         constexpr auto begin(this auto& self) { return Iterator<COPYCONSTFORTYPE(decltype(self), T), STRIDE>{ self.data }; }
         constexpr auto   end(this auto& self) { return Iterator<COPYCONSTFORTYPE(decltype(self), T), STRIDE>{ self.data + static_cast<std::ptrdiff_t>(COUNT) * STRIDE }; } // gcc warns if '*end()' would be OOB, even when it isn't dereffed
 
-        constexpr ReferenceType(T* origin) : data(origin) {}
+        constexpr PointerType(T* origin) : data(origin) {}
 
     protected:
         T* data;
     };
+
+    // Reference type, transient type with no ref counting
+    // FIXME
 
     ////////////
     // TENSOR //
@@ -165,11 +169,11 @@ namespace linalg {
     template <typename T, std::size_t M, std::size_t N, class StorageType = ValueType<T, M, N>>
     using Matrix = TensorType<StorageType, T, M, N>;
     template <typename T, std::size_t M, std::size_t N, std::ptrdiff_t STRIDE = 1z>
-    using MatrixRef = TensorType<ReferenceType<T, M * N, STRIDE>, T, M, N>;
+    using MatrixPtr = TensorType<PointerType<T, M * N, STRIDE>, T, M, N>;
     template <typename T, std::size_t N, class StorageType = ValueType<T, N>>
     using Vector = TensorType<StorageType, T, N>;
     template <typename T, std::size_t N, std::ptrdiff_t STRIDE = 1z>
-    using VectorRef = TensorType<ReferenceType<T, N, STRIDE>, T, N>;
+    using VectorPtr = TensorType<PointerType<T, N, STRIDE>, T, N>;
 
     // Deduction guides for value-initialization
     // Anything higher than 10-dimensional can still be value-initialized, but template params must be explicit
@@ -228,7 +232,7 @@ namespace linalg {
 
         template <class OtherBase, typename T2, std::size_t... IDX>
         constexpr auto binaryMapInternal(auto func, const TensorType<OtherBase, T2, DIMS...>& v, std::index_sequence<IDX...>) const {
-            return TensorType<ValueType<T, DIMS...>, decltype(func(T(), T2())), DIMS...>{ func(get(IDX), v.get(IDX))... };
+            return Tensor<decltype(func(T(), T2())), DIMS...>{ func(get(IDX), v.get(IDX))... };
         }
         template <std::size_t... IDX>
         inline void mapWriteInternal(auto func, std::index_sequence<IDX...>) {
@@ -247,7 +251,12 @@ namespace linalg {
         constexpr std::size_t count()          const { return COUNT; }
         constexpr std::size_t dimensionality() const { return sizeof...(DIMS); }
 
-        // Functional programming support
+        // Functional programming options
+        constexpr auto map(auto func) const {
+            return [this]<std::size_t... IDX>(auto func, std::index_sequence<IDX...>) constexpr {
+                return Tensor<decltype(func(T())), DIMS...>{ func(get(IDX))... };
+            }(func, MAKEINDICES(COUNT));
+        }
         constexpr auto reduce(auto func, auto starting) const {
             return [this]<std::size_t... IDX>(auto& func, auto starting, std::index_sequence<IDX...>) constexpr {
                 return ((starting = func(starting, get(IDX))), ...);
@@ -257,11 +266,6 @@ namespace linalg {
             return [this]<std::size_t... IDX>(auto& func, T starting, std::index_sequence<IDX...>) constexpr {
                 return ((starting = func(starting, get(1uz + IDX))), ...);
             }(func, get(0uz), MAKEINDICES(COUNT - 1uz));
-        }
-        constexpr auto map(auto func) const {
-            return [this]<std::size_t... IDX>(auto func, std::index_sequence<IDX...>) constexpr {
-                return TensorType<ValueType<T, DIMS...>, decltype(func(T())), DIMS...>{ func(get(IDX))... };
-            }(func, MAKEINDICES(COUNT));
         }
 
         // Member operator overloads
@@ -288,7 +292,7 @@ namespace linalg {
                     if constexpr (sizeof...(restInds))      // more constraints to get through
                         return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), offset, restInds...);
                     else if constexpr (sizeof...(RESTDIMS)) // there are unconstrained dimensions TODO reuse something rather than fold?
-                        return TensorType<ReferenceType<COPYCONSTFORTYPE(Self, T), (RESTDIMS * ...)>, COPYCONSTFORTYPE(Self, T), RESTDIMS...>{ std::forward<Self>(self).data + offset };
+                        return TensorType<PointerType<COPYCONSTFORTYPE(Self, T), (RESTDIMS * ...)>, COPYCONSTFORTYPE(Self, T), RESTDIMS...>{ std::forward<Self>(self).data + offset };
                     else                                    // the final dimension is constrained, return the value
                         return *(std::forward<Self>(self).data + offset); //TODO need to use storagetype here
                 }

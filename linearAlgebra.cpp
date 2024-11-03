@@ -10,11 +10,11 @@ void testVectors() {
     auto v1 = linalg::Vector{{ 1.0, 2.0, 3.0 }};
     cout << STR_EVAL(-v1) << "\t<- a 'value-type' vector that owns its data." << endl;
     float reallyLongArray[] = { -1.0f, -3.0f, 0.0f, 1.0f, 4.2f, 3.9f, -33.0f, 0.003f, 14.0f, 0.0f, 0.0f, 22.0f };
-    auto v2 = linalg::VectorRef<float, 3uz, -3z>{reallyLongArray + 8uz};
+    auto v2 = linalg::VectorPtr<float, 3uz, -3z>{reallyLongArray + 8uz};
     //                          type   size stride  parent        offset
 
-    // Reference types
-    cout << STR_EVAL(v2) << "\t<- a 'reference-type' vector that doesn't own.\nreallyLongArray=";
+    // Pointer types
+    cout << STR_EVAL(v2) << "\t<- a 'pointer-type' vector that doesn't own.\nreallyLongArray=";
     for (const auto &e : reallyLongArray)
         cout << " " << e;
     cout << endl;
@@ -153,8 +153,8 @@ void testTensors() {
 // MAIN //
 //////////
 int main() {
-    // testVectors();
-    testMatrices();
+    testVectors();
+    // testMatrices();
     // testTensors();
 
     return 0;
