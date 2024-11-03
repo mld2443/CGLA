@@ -69,7 +69,7 @@ namespace linalg {
 
     // Shared iterator type for for-each loops
     template <typename QUALIFIEDTYPE, std::ptrdiff_t STRIDE = 1z>
-    class Iterator {
+    struct Iterator {
     public:
         constexpr Iterator(QUALIFIEDTYPE* p) : pos(p) {}
 
@@ -83,7 +83,7 @@ namespace linalg {
 
     // Value type recursive primary template
     template <typename T, std::size_t PRODUCT, std::size_t DIM = 0uz, std::size_t... REST>
-    class ValueTypeRecursive : private ValueTypeRecursive<T, PRODUCT * DIM, REST...> {
+    class ValueTypeRecursive : ValueTypeRecursive<T, PRODUCT * DIM, REST...> {
         using BASE = ValueTypeRecursive<T, PRODUCT * DIM, REST...>;
     protected:
         using MYTYPE = typename BASE::MYTYPE[DIM];
@@ -113,7 +113,8 @@ namespace linalg {
 
     // Top-level Value-type class
     template <typename T, std::size_t... DIMS>
-    class ValueType : private ValueTypeRecursive<T, 1uz, DIMS...> {
+    struct ValueType : ValueTypeRecursive<T, 1uz, DIMS...> {
+    private:
         using BASE = ValueTypeRecursive<T, 1uz, DIMS...>;
     protected:
         using BASE::ValueTypeRecursive;
@@ -132,7 +133,7 @@ namespace linalg {
 
     // Reference type, transient type with no ref counting
     template <typename T, std::size_t C, std::ptrdiff_t STRIDE = 1z>
-    class ReferenceType {
+    struct ReferenceType {
     protected:
         static constexpr std::size_t COUNT = C;
 
@@ -156,7 +157,7 @@ namespace linalg {
     ////////////
 
     template <class StorageBase, typename T, std::size_t... DIMS>
-    class TensorType;
+    struct TensorType;
 
     // Convenience aliases
     template <typename T, std::size_t... DIMS>
@@ -195,24 +196,23 @@ namespace linalg {
 
     // TensorType definition
     template <class StorageBase, typename T, std::size_t... DIMS>
-    class TensorType : public StorageBase {
+    struct TensorType final : StorageBase {
     private:
+        template <class OtherBase, typename T2, std::size_t... DIMS2>
+        friend struct TensorType;
+        friend StorageBase;
         using StorageBase::COUNT;
         using StorageBase::get;
-        template <class OtherBase, typename T2, std::size_t... DIMS2>
-        friend class TensorType;
-        friend StorageBase;
 
-        // Special 'template container' prettyPrint() uses to build compile-time c-string whitespace
-        template <char... STR>
-        struct String { static constexpr char VALUES[] = {STR..., '\0'}; };
+        // Special 'template container' prettyPrint() uses to build compile-time whitespace
+        template <char... STR> struct String { static constexpr char VALUES[] = {STR..., '\0'}; };
 
         // Helper for operator<<, displays arbitrary dimensional tensors in a human-readable format
         template <std::size_t STEP, std::size_t THISDIM, std::size_t NEXTDIM = 0uz, std::size_t... RESTDIMS, char... PRFX, std::size_t... IDX>
         constexpr void prettyPrint(std::ostream& os, std::index_sequence<IDX...>&&, std::size_t offset = 0uz, String<PRFX...> prefix = {}) const {
             auto genSpace = []<std::size_t... IDX2>(std::index_sequence<IDX2...>&&) constexpr { return String<PRFX..., (' ' + static_cast<char>(0uz & IDX2))...>(); };
 
-            constexpr size_t DIMSREMAINING = sizeof...(RESTDIMS) + (NEXTDIM != 0uz) + 1uz;
+            constexpr size_t DIMSREMAINING = sizeof...(RESTDIMS) + (NEXTDIM > 0uz) + 1uz;
             if constexpr (DIMSREMAINING > 3uz && DIMSREMAINING % 3uz != 0uz )
                 os << (offset ? "\n" : "");
 
