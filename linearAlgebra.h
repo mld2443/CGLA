@@ -68,7 +68,8 @@ namespace linalg {
 
     // Helper macros to reduce clutter, undefined at end of namespace
     #define COPYCONSTFORTYPE(T1, ...) std::conditional_t<std::is_const_v<std::remove_reference_t<T1>>, const __VA_ARGS__, __VA_ARGS__>
-    #define MAKEINDICES(SIZE) std::make_index_sequence<SIZE>{}
+    #define MAKESEQUENCE(SIZE) std::make_index_sequence<SIZE>{}
+    #define SEQUENCE(NAME) std::index_sequence<NAME>&&
 
     ///////////////////
     // STORAGE TYPES //
@@ -109,10 +110,10 @@ namespace linalg {
 
     private:
         template <std::size_t... IDX>
-        constexpr ValueTypeRecursive(std::index_sequence<IDX...>&&, MYTYPE* first) : data{ first[IDX]... } {} // clang reports past-the-end deref illegal for constexpr
+        constexpr ValueTypeRecursive(SEQUENCE(IDX...), MYTYPE* first) : data{ first[IDX]... } {} // clang reports past-the-end deref illegal for constexpr
 
     protected:
-        constexpr ValueTypeRecursive(MYTYPE&& first) : ValueTypeRecursive<T, COUNT>(MAKEINDICES(COUNT), &first) {}
+        constexpr ValueTypeRecursive(MYTYPE&& first) : ValueTypeRecursive<T, COUNT>(MAKESEQUENCE(COUNT), &first) {}
         constexpr ValueTypeRecursive(auto&&... payload) : data{ std::forward<T>(payload)... } {}
 
         T data[COUNT];
@@ -225,17 +226,17 @@ namespace linalg {
 
         // Helper for operator<<, displays arbitrary dimensional tensors in a human-readable format
         template <std::size_t STEP, std::size_t THISDIM, std::size_t NEXTDIM = 0uz, std::size_t... RESTDIMS, char... PRFX, std::size_t... IDX>
-        constexpr void prettyPrint(std::ostream& os, std::index_sequence<IDX...>&&, std::size_t offset = 0uz, String<PRFX...> prefix = {}) const {
-            auto genSpace = []<std::size_t... IDX2>(std::index_sequence<IDX2...>&&) constexpr { return String<PRFX..., (' ' + static_cast<char>(0uz & IDX2))...>(); };
+        constexpr void prettyPrint(std::ostream& os, SEQUENCE(IDX...), std::size_t offset = 0uz, String<PRFX...> prefix = {}) const {
+            auto genSpace = []<std::size_t... IDX2>(SEQUENCE(IDX2...)) constexpr { return String<PRFX..., (' ' + static_cast<char>(0uz & IDX2))...>(); };
 
             constexpr size_t DIMSREMAINING = sizeof...(RESTDIMS) + (NEXTDIM > 0uz) + 1uz;
             if constexpr (DIMSREMAINING > 3uz && DIMSREMAINING % 3uz != 0uz )
                 os << (offset ? "\n" : "");
 
             if constexpr (DIMSREMAINING % 3uz == 0uz)
-                (prettyPrint<STEP / NEXTDIM, NEXTDIM, RESTDIMS...>(os, MAKEINDICES(NEXTDIM), offset + IDX * STEP, genSpace(MAKEINDICES(((DIMSREMAINING - 3uz) ? (DIMSREMAINING - 3uz) : 3uz) * IDX))), ...);
+                (prettyPrint<STEP / NEXTDIM, NEXTDIM, RESTDIMS...>(os, MAKESEQUENCE(NEXTDIM), offset + IDX * STEP, genSpace(MAKESEQUENCE(((DIMSREMAINING - 3uz) ? (DIMSREMAINING - 3uz) : 3uz) * IDX))), ...);
             else if constexpr (NEXTDIM)
-                (prettyPrint<STEP / NEXTDIM, NEXTDIM, RESTDIMS...>(os, MAKEINDICES(NEXTDIM), offset + IDX * STEP, String<PRFX...>{}), ...);
+                (prettyPrint<STEP / NEXTDIM, NEXTDIM, RESTDIMS...>(os, MAKESEQUENCE(NEXTDIM), offset + IDX * STEP, String<PRFX...>{}), ...);
             else {
                 os << (offset ? "\n" : "") << prefix.VALUES;
                 ((os << (IDX ? ", " : "") << get(offset + IDX)), ...) << ((offset + THISDIM < COUNT) ? "," : "");
@@ -243,15 +244,15 @@ namespace linalg {
         }
 
         template <class OtherBase, typename T2, std::size_t... IDX>
-        constexpr auto binaryMap(auto func, const TensorType<OtherBase, T2, DIMS...>& v, std::index_sequence<IDX...>) const {
+        constexpr auto binaryMap(auto func, const TensorType<OtherBase, T2, DIMS...>& v, SEQUENCE(IDX...)) const {
             return Tensor<decltype(func(T(), T2())), DIMS...>{ func(get(IDX), v.get(IDX))... };
         }
         template <std::size_t... IDX>
-        inline void mapWrite(auto func, std::index_sequence<IDX...>) {
+        inline void mapWrite(auto func, SEQUENCE(IDX...)) {
             (func(get(IDX)), ...);
         }
         template <class OtherBase, typename T2, std::size_t... IDX>
-        inline void binaryMapWrite(auto func, const TensorType<OtherBase, T2, DIMS...>& v, std::index_sequence<IDX...>) {
+        inline void binaryMapWrite(auto func, const TensorType<OtherBase, T2, DIMS...>& v, SEQUENCE(IDX...)) {
             (func(get(IDX), v.get(IDX)), ...);
         }
 
@@ -265,34 +266,34 @@ namespace linalg {
 
         // Functional programming options
         constexpr auto map(auto func) const {
-            return [this]<std::size_t... IDX>(auto func, std::index_sequence<IDX...>) constexpr {
+            return [this]<std::size_t... IDX>(auto func, SEQUENCE(IDX...)) constexpr {
                 return Tensor<decltype(func(T())), DIMS...>{ func(get(IDX))... };
-            }(func, MAKEINDICES(COUNT));
+            }(func, MAKESEQUENCE(COUNT));
         }
         constexpr auto reduce(auto func, auto starting) const {
-            return [this]<std::size_t... IDX>(auto& func, auto starting, std::index_sequence<IDX...>) constexpr {
+            return [this]<std::size_t... IDX>(auto& func, auto starting, SEQUENCE(IDX...)) constexpr {
                 return ((starting = func(starting, get(IDX))), ...);
-            }(func, starting, MAKEINDICES(COUNT));
+            }(func, starting, MAKESEQUENCE(COUNT));
         }
         constexpr auto reduce(auto func) const {
-            return [this]<std::size_t... IDX>(auto& func, T starting, std::index_sequence<IDX...>) constexpr {
+            return [this]<std::size_t... IDX>(auto& func, T starting, SEQUENCE(IDX...)) constexpr {
                 return ((starting = func(starting, get(1uz + IDX))), ...);
-            }(func, get(0uz), MAKEINDICES(COUNT - 1uz));
+            }(func, get(0uz), MAKESEQUENCE(COUNT - 1uz));
         }
 
         // Member operator overloads
         constexpr auto operator-()              const { return map([  ](const T& e){ return    -e; }); }
         constexpr auto operator*(const auto& s) const { return map([&s](const T& e){ return e * s; }); }
         constexpr auto operator/(const auto& s) const { return map([&s](const T& e){ return e / s; }); }
-        constexpr auto operator+(const auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 + e2; }, t, MAKEINDICES(COUNT)); }
-        constexpr auto operator-(const auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 - e2; }, t, MAKEINDICES(COUNT)); }
+        constexpr auto operator+(const auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 + e2; }, t, MAKESEQUENCE(COUNT)); }
+        constexpr auto operator-(const auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 - e2; }, t, MAKESEQUENCE(COUNT)); }
 
         // Mutating operators
-        inline auto& operator*=(const auto& s) { mapWrite([&s](T& e){ e *= s; }, MAKEINDICES(COUNT)); return *this; }
-        inline auto& operator/=(const auto& s) { mapWrite([&s](T& e){ e /= s; }, MAKEINDICES(COUNT)); return *this; }
-        inline auto& operator+=(const auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 += e2; }, t, MAKEINDICES(COUNT)); return *this; }
-        inline auto& operator-=(const auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 -= e2; }, t, MAKEINDICES(COUNT)); return *this; }
-        inline auto& operator= (const auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 =  e2; }, t, MAKEINDICES(COUNT)); return *this; }
+        inline auto& operator*=(const auto& s) { mapWrite([&s](T& e){ e *= s; }, MAKESEQUENCE(COUNT)); return *this; }
+        inline auto& operator/=(const auto& s) { mapWrite([&s](T& e){ e /= s; }, MAKESEQUENCE(COUNT)); return *this; }
+        inline auto& operator+=(const auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 += e2; }, t, MAKESEQUENCE(COUNT)); return *this; }
+        inline auto& operator-=(const auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 -= e2; }, t, MAKESEQUENCE(COUNT)); return *this; }
+        inline auto& operator= (const auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 =  e2; }, t, MAKESEQUENCE(COUNT)); return *this; }
 
         // Accessor
         template <class Self>
@@ -321,9 +322,9 @@ namespace linalg {
         ////////////////////////////
 
         constexpr auto dot(this const isVector auto& self, const isVector auto& v) requires(self.count() == v.count()) {
-            return []<std::size_t... IDX>(const auto& v1, const auto& v2, std::index_sequence<IDX...>) constexpr {
+            return []<std::size_t... IDX>(const auto& v1, const auto& v2, SEQUENCE(IDX...)) constexpr {
                 return ((v1[IDX] * v2[IDX]) + ...);
-            }(self, v, MAKEINDICES(COUNT));
+            }(self, v, MAKESEQUENCE(COUNT));
         }
         constexpr T magnitudeSqr(this const isVector auto& self) { return self.dot(self);                 }
         constexpr T    magnitude(this const isVector auto& self) { return std::sqrt(self.magnitudeSqr()); }
@@ -342,16 +343,16 @@ namespace linalg {
 
         // Identity matrix just in case
         static constexpr auto Identity() requires(dimensionality() == 2uz) {
-            return []<std::size_t M, std::size_t N, std::size_t... IDX>(std::index_sequence<IDX...>&&) constexpr requires(M == N) {
+            return []<std::size_t M, std::size_t N, std::size_t... IDX>(SEQUENCE(IDX...)) constexpr requires(M == N) {
                 return Matrix<T, M, N>{ T((IDX % (M + 1uz)) == 0uz)... };
-            }.template operator()<DIMS...>(MAKEINDICES(COUNT));
+            }.template operator()<DIMS...>(MAKESEQUENCE(COUNT));
         }
 
         template<typename T2, std::size_t M, std::size_t N, std::size_t O, class OtherStorage>
         constexpr auto operator*(this const Matrix<T, M, N, StorageBase>& self, const Matrix<T2, N, O, OtherStorage>& m) {
-            return []<std::size_t... IDX>(const auto& m1, const auto& m2, std::index_sequence<IDX...>) constexpr {
+            return []<std::size_t... IDX>(const auto& m1, const auto& m2, SEQUENCE(IDX...)) constexpr {
                 return Matrix<decltype(T()*T2()), M, O>{ m1[IDX / O].dot(m2[' '][IDX % O])... };
-            }(self, m, MAKEINDICES(M*O));
+            }(self, m, MAKESEQUENCE(M*O));
         }
 
         // template <class MYTYPE>
@@ -367,7 +368,7 @@ namespace linalg {
     constexpr auto operator/(const T& s, const TensorType<StorageBase, T, DIMS...> &t) { return t.map([&s](const T& e) { return e / s; }); }
     template <class StorageBase, typename T, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
     constexpr std::ostream& operator<<(std::ostream& os, const TensorType<StorageBase, T, FIRSTDIM, RESTDIMS...>& t) {
-        t.template prettyPrint<(RESTDIMS * ... * 1uz), FIRSTDIM, RESTDIMS...>(os, MAKEINDICES(FIRSTDIM));
+        t.template prettyPrint<(RESTDIMS * ... * 1uz), FIRSTDIM, RESTDIMS...>(os, MAKESEQUENCE(FIRSTDIM));
         return os;
     }
 
