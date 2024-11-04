@@ -243,15 +243,15 @@ namespace linalg {
         }
 
         template <class OtherBase, typename T2, std::size_t... IDX>
-        constexpr auto binaryMapInternal(auto func, const TensorType<OtherBase, T2, DIMS...>& v, std::index_sequence<IDX...>) const {
+        constexpr auto binaryMap(auto func, const TensorType<OtherBase, T2, DIMS...>& v, std::index_sequence<IDX...>) const {
             return Tensor<decltype(func(T(), T2())), DIMS...>{ func(get(IDX), v.get(IDX))... };
         }
         template <std::size_t... IDX>
-        inline void mapWriteInternal(auto func, std::index_sequence<IDX...>) {
+        inline void mapWrite(auto func, std::index_sequence<IDX...>) {
             (func(get(IDX)), ...);
         }
         template <class OtherBase, typename T2, std::size_t... IDX>
-        inline void binaryMapWriteInternal(auto func, const TensorType<OtherBase, T2, DIMS...>& v, std::index_sequence<IDX...>) {
+        inline void binaryMapWrite(auto func, const TensorType<OtherBase, T2, DIMS...>& v, std::index_sequence<IDX...>) {
             (func(get(IDX), v.get(IDX)), ...);
         }
 
@@ -284,15 +284,15 @@ namespace linalg {
         constexpr auto operator-()              const { return map([  ](const T& e){ return    -e; }); }
         constexpr auto operator*(const auto& s) const { return map([&s](const T& e){ return e * s; }); }
         constexpr auto operator/(const auto& s) const { return map([&s](const T& e){ return e / s; }); }
-        constexpr auto operator+(const auto& t) const { return binaryMapInternal([](const T& e1, const auto& e2){ return e1 + e2; }, t, MAKEINDICES(COUNT)); }
-        constexpr auto operator-(const auto& t) const { return binaryMapInternal([](const T& e1, const auto& e2){ return e1 - e2; }, t, MAKEINDICES(COUNT)); }
+        constexpr auto operator+(const auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 + e2; }, t, MAKEINDICES(COUNT)); }
+        constexpr auto operator-(const auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 - e2; }, t, MAKEINDICES(COUNT)); }
 
         // Mutating operators
-        inline auto& operator*=(const auto& s) { mapWriteInternal([&s](T& e){ e *= s; }, MAKEINDICES(COUNT)); return *this; }
-        inline auto& operator/=(const auto& s) { mapWriteInternal([&s](T& e){ e /= s; }, MAKEINDICES(COUNT)); return *this; }
-        inline auto& operator+=(const auto& t) { binaryMapWriteInternal([](T& e1, const auto& e2){ e1 += e2; }, t, MAKEINDICES(COUNT)); return *this; }
-        inline auto& operator-=(const auto& t) { binaryMapWriteInternal([](T& e1, const auto& e2){ e1 -= e2; }, t, MAKEINDICES(COUNT)); return *this; }
-        inline auto& operator= (const auto& t) { binaryMapWriteInternal([](T& e1, const auto& e2){ e1 =  e2; }, t, MAKEINDICES(COUNT)); return *this; }
+        inline auto& operator*=(const auto& s) { mapWrite([&s](T& e){ e *= s; }, MAKEINDICES(COUNT)); return *this; }
+        inline auto& operator/=(const auto& s) { mapWrite([&s](T& e){ e /= s; }, MAKEINDICES(COUNT)); return *this; }
+        inline auto& operator+=(const auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 += e2; }, t, MAKEINDICES(COUNT)); return *this; }
+        inline auto& operator-=(const auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 -= e2; }, t, MAKEINDICES(COUNT)); return *this; }
+        inline auto& operator= (const auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 =  e2; }, t, MAKEINDICES(COUNT)); return *this; }
 
         // Accessor
         template <class Self>
@@ -316,11 +316,9 @@ namespace linalg {
             }.template operator()<COUNT, DIMS...>(std::forward<Self>(self), 0z, first, inds...);
         }
 
-        /////////////////////
-        // SPECIALIZATIONS //
-        /////////////////////
-
-        // Vector Geometric methods
+        ////////////////////////////
+        // VECTOR SPECIALIZATIONS //
+        ////////////////////////////
 
         constexpr auto dot(this const isVector auto& self, const isVector auto& v) requires(self.count() == v.count()) {
             return []<std::size_t... IDX>(const auto& v1, const auto& v2, std::index_sequence<IDX...>) constexpr {
@@ -337,6 +335,29 @@ namespace linalg {
                      self[2uz]*v[0uz] - self[0uz]*v[2uz],
                      self[0uz]*v[1uz] - self[1uz]*v[0uz] };
         }
+
+        ////////////////////////////
+        // MATRIX SPECIALIZATIONS //
+        ////////////////////////////
+
+        // Identity matrix just in case
+        static constexpr auto Identity() requires(dimensionality() == 2uz) {
+            return []<std::size_t M, std::size_t N, std::size_t... IDX>(std::index_sequence<IDX...>&&) constexpr requires(M == N) {
+                return Matrix<T, M, N>{ T((IDX % (M + 1uz)) == 0uz)... };
+            }.template operator()<DIMS...>(MAKEINDICES(COUNT));
+        }
+
+        template<typename T2, std::size_t M, std::size_t N, std::size_t O, class OtherStorage>
+        constexpr auto operator*(this const Matrix<T, M, N, StorageBase>& self, const Matrix<T2, N, O, OtherStorage>& m) {
+            return []<std::size_t... IDX>(const auto& m1, const auto& m2, std::index_sequence<IDX...>) constexpr {
+                return Matrix<decltype(T()*T2()), M, O>{ m1[IDX / O].dot(m2[' '][IDX % O])... };
+            }(self, m, MAKEINDICES(M*O));
+        }
+
+        // template <class MYTYPE>
+        // constexpr auto getDiagonal(this MYTYPE& self) {
+        //     return VectorBase<COPYCONSTFORTYPE(MYTYPE, T), std::min(M, N), (N + 1z) * S, ReferenceType>{ self.data };
+        // }
     };
 
     // Right-side operator overloads
@@ -353,36 +374,3 @@ namespace linalg {
     #undef COPYCONSTFORTYPE
     #undef MAKEINDICES
 }
-
-#if 0
-template <typename T, std::size_t M, std::size_t N, std::ptrdiff_t S, STORAGECLASS STORAGETYPE>
-class MatrixBase : public STORAGETYPE<T, M, N, S>, public TensorRoot<T, M, N> {
-private:
-    using BaseType = T;
-    template <typename TYPE>
-    using ReturnType = MatrixBase<TYPE, M, N, 1z, ValueType>;
-
-    template <std::size_t... IDX>
-    constexpr static ReturnType<T> matrixIdentity(std::index_sequence<IDX...>) {
-        return { (IDX % (M + 1uz) ? T(0) : T(1))... };
-    }
-    template <typename T2, std::size_t O, std::ptrdiff_t S2, STORAGECLASS OTHERSTORAGE, std::size_t... IDX>
-    constexpr auto matrixMultiply(const MatrixBase<T2, N, O, S2, OTHERSTORAGE>& m, std::index_sequence<IDX...>) const {
-        return MatrixBase<decltype(T()*T2()), M, O, 1z, ValueType>{ getRow(IDX / O).dot(m.getCol(IDX % O))... };
-    }
-
-public:
-    // Identity matrix for some reason
-    constexpr static auto I() requires(M == N) { return matrixIdentity(MAKEINDICES(M*N)); }
-
-    // Accessors
-    constexpr decltype(auto) operator[](this auto& self, std::size_t m, std::size_t n) { return self.get(n + m*N); }
-    template <class MYTYPE> constexpr auto getRow(this MYTYPE& self, std::size_t row) { return VectorBase<COPYCONSTFORTYPE(MYTYPE, T), N,     S, ReferenceType>{ self.data, static_cast<std::ptrdiff_t>(row * N * S) }; }
-    template <class MYTYPE> constexpr auto getCol(this MYTYPE& self, std::size_t col) { return VectorBase<COPYCONSTFORTYPE(MYTYPE, T), M, N * S, ReferenceType>{ self.data, static_cast<std::ptrdiff_t>(col     * S) }; }
-    template <class MYTYPE> constexpr auto getDiagonal(this MYTYPE& self) { return VectorBase<COPYCONSTFORTYPE(MYTYPE, T), std::min(M, N), (N + 1z) * S, ReferenceType>{ self.data, 0z }; }
-
-    // Member operators
-    template<typename T2, std::size_t O, std::ptrdiff_t S2, STORAGECLASS OTHERSTORAGE>
-    constexpr auto operator*(const MatrixBase<T2, N, O, S2, OTHERSTORAGE>& m) const { return matrixMultiply(m, MAKEINDICES(M*O)); }
-};
-#endif

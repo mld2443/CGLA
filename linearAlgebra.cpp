@@ -35,17 +35,17 @@ void testVectors() {
 }
 
 void testMatrices() {
-    constexpr auto m1 = linalg::Matrix<double, 2uz, 5uz>{ { { 1.0, 0.0, 1.0, 0.0, 1.0 },
-                                                            { 0.0, 1.0, 0.0, 1.0, 0.0 } } };
-    cout << m1 << "\n" << endl;
-    constexpr auto m2 = linalg::Matrix<float, 5uz, 3uz>{ { { 1, 0, 1 },
-                                                           { 0, 1, 0 },
-                                                           { 1, 0, 1 },
-                                                           { 0, 1, 0 },
-                                                           { 1, 0, 1 } } };
-    //cout << m2 << "\n" << endl;
+    // constexpr auto m1 = linalg::Matrix<double, 2uz, 5uz>{ { { 1.0, 0.0, 1.0, 0.0, 1.0 },
+    //                                                         { 0.0, 1.0, 0.0, 1.0, 0.0 } } };
+    // cout << m1 << "\n" << endl;
+    // constexpr auto m2 = linalg::Matrix<float, 5uz, 3uz>{ { { 1, 0, 1 },
+    //                                                        { 0, 1, 0 },
+    //                                                        { 1, 0, 1 },
+    //                                                        { 0, 1, 0 },
+    //                                                        { 1, 0, 1 } } };
+    // cout << m2 << "\n" << endl;
 
-    cout << m2[' '] << endl;
+    // cout << "\n" << m2[' ', 1uz] << endl;
 
     // constexpr auto m3 = m1 * m2;
     // cout << "constexpr " LINE_EVAL(m3) << endl;
@@ -54,16 +54,16 @@ void testMatrices() {
     // constexpr linalg::Vector v1{linalg::TensorBase<linalg::ValueType, 1z, float, 4uz>{ 2.0f, 1.0f, 0.0f, -1.0f }};
     // cout << STR_EVAL(v1) << endl;
 
-    // auto m5 = linalg::Matrix<unsigned, 5uz, 5uz>::I();
+    auto m5 = linalg::Matrix<unsigned, 5uz, 5uz>::Identity();
     // m5.getRow(3uz) += linalg::Vector<uint32_t, 5uz>{ 4u };
     // m5.getRow(0uz) = m5.getCol(4uz);
     // m5.getDiagonal() *= 3u;
-    // cout << LINE_EVAL(m5) << endl;
+    cout << LINE_EVAL(m5) << endl;
 }
 
 void testTensors() {
     // Massive 6-dimensional multilinear tensor
-    constexpr auto tensor1 = linalg::Tensor{
+    [[maybe_unused]] constexpr auto tensor1 = linalg::Tensor{
         {{{{{{  0,  1,  2},
              {  3,  4,  5}},
                 {{  6,  7,  8},
@@ -145,16 +145,16 @@ void testTensors() {
     };
 
     // Test for compile-time evaluation
-    static_assert(tensor1[0][2, 1, 0][0, 1] > 0);
-    cout << LINE_EVAL(tensor1) << "\n" STR_EVAL(sizeof(tensor1)) << "\n" STR_EVAL(tensor1[0, 2, 1, 0, 0, 1]) << "\n" STR_EVAL(tensor1[0][2][1][0][0][1]) << endl;
+    //static_assert(tensor1[0][2, 1, 0][0, 1] > 0);
+    //cout << LINE_EVAL(tensor1) << "\n" STR_EVAL(sizeof(tensor1)) << "\n" STR_EVAL(tensor1[0, 2, 1, 0, 0, 1]) << "\n" STR_EVAL(tensor1[0][2][1][0][0][1]) << endl;
 }
 
 //////////
 // MAIN //
 //////////
 int main() {
-    testVectors();
-    // testMatrices();
+    // testVectors();
+    testMatrices();
     // testTensors();
 
     return 0;
