@@ -2,7 +2,7 @@
 
 A C++ generic linear algebra header library designed for flexibility, readability, and comprehension.
 
-Linear Algebra in C++ is often messy, verbose, cluttered, and/or opaque. Inspired specifically by the source code given for the single value decomposition by (Numerical Recipes in C++)[https://numerical.recipes/book.html], I set out to create a tool to help me comprehend what's happening inside before (C++26's \<linalg\> header)[https://en.cppreference.com/w/cpp/header/linalg] comes to deliver us from anarchy.
+Linear Algebra in C++ is often messy, verbose, cluttered, and/or opaque. Inspired specifically by the source code given for the single value decomposition by [Numerical Recipes in C++](https://numerical.recipes/book.html), I set out to create a tool to help me comprehend what's happening inside before [C++26's \<linalg\> header](https://en.cppreference.com/w/cpp/header/linalg) comes to deliver us from anarchy.
 
 ## Design Goals
 
