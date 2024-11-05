@@ -42,30 +42,6 @@
 #include <utility>     // forward, index_sequence, make_index_sequence
 
 namespace linalg {
-    // Design goals
-    // 1 "It just works": Flexibility and transparency from implementation, usage should look as close to formulae and equations as C++ allows
-    // 2 Compile-time evaluation and inlining
-    // 3 As generic as possible, multilinear tensors of arbitrary dimension, even if I don't know what to do with them
-    // - speed is a "nice to have"
-
-    // TODO:
-    // [x] SETTLE ON PARADIGM: It's multilinear tensors all the way down and recursive inheritance
-    // [x] Generic tensor accessor
-    // [x] Display arbitrary tensors
-    // [x] Shared ops: map(x), fold(x), scalar mult/div(x), negate(x), add(x), subtract(x), maybe inline mult/div(1)
-    // [x] Vector ops: dot (x), cross (x)
-    // [x] Rewrite Matrix and Vector as type aliases; clang 18 doesn't support template deductions for aliases
-    // [x] Merge StorageBase features into Tensor and consider removing it(x)
-    // [x] Default initialization(x)
-    // [x] Rework "internal" functions into lambdas(x)
-    // [x] Merge recursive ValueType into Tensor(x) and ensure base functionality(x)
-    // [ ] Slicing using the operator[] with a wildcard(4)
-    // [ ] Matrix transpose(4)
-    // [ ] Vector transpose -> Matrix(1)
-    // [ ] Matrix ops: matrix mult (2)(add [[nodiscard]] attr), eigenvector/value(3), determinant(3), invert(1), identity(1), rank(3), ...
-    // [ ] Tensor ops: tensor product?(?)
-
-
     // Helper macros to reduce clutter, undefined at end of namespace
     #define COPYCONSTFORTYPE(T1, ...) std::conditional_t<std::is_const_v<std::remove_reference_t<T1>>, const __VA_ARGS__, __VA_ARGS__>
     #define MAKESEQUENCE(SIZE) std::make_index_sequence<SIZE>{}
