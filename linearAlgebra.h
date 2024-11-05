@@ -106,6 +106,10 @@ namespace linalg {
         constexpr decltype(auto) get(this Self&& self, std::size_t i) { return *(std::forward<Self>(self).data + static_cast<std::ptrdiff_t>(i) * STRIDE); }
 
     public:
+        // constexpr auto deref(auto , auto... ) {
+        //     return T();
+        // }
+
         // Iterators
         constexpr auto begin(this auto& self) { return Iterator<COPYCONST(decltype(self), T), STRIDE>{ self.data }; }
         constexpr auto   end(this auto& self) { return Iterator<COPYCONST(decltype(self), T), STRIDE>{ self.data + static_cast<std::ptrdiff_t>(COUNT) * STRIDE }; } // gcc warns if '*end()' would be OOB, even when it isn't dereffed
@@ -122,8 +126,25 @@ namespace linalg {
         using Base = RecursiveValueType<T, COUNT, REST...>;
         static constexpr std::size_t STEPSIZE = (REST * ... * 1uz);
     protected:
-        using MyType = typename Base::MyType[DIM];
+        using NestedArray = typename Base::NestedArray[DIM];
         using Base::data;
+
+        template <std::size_t NEXT = 1uz, std::size_t...>
+        static constexpr std::size_t getNext = NEXT;
+
+    private:
+        // Helper to flatten the nested input array pack
+        template <std::size_t I>
+        static constexpr auto getNth(NestedArray&& arr0, auto&&... rest) {
+            if constexpr (I)
+                return getNth<I - 1uz>(std::forward<NestedArray>(rest)...);
+            else
+                return std::forward<NestedArray>(arr0);
+        }
+
+    protected:
+        template <std::size_t... IDX>
+        constexpr RecursiveValueType(SEQUENCE(IDX...), auto&&... arrays) : Base(MAKESEQUENCE(DIM * getNext<REST...>), getNth<IDX / DIM>(std::forward<NestedArray>(arrays)...)[IDX % DIM]...) {}
 
     public:
         template <class Self>
@@ -139,7 +160,6 @@ namespace linalg {
             return std::forward<COPYCONST(Self, Base)>(self).returnRef(index, TList<>{DIMS..., DIM}, TList<STEPS..., STEPSIZE>{});
         }
 
-        constexpr RecursiveValueType(MyType&& payload) : Base(std::forward<typename Base::MyType>(*payload)) {}
         constexpr RecursiveValueType(auto&&... payload) : Base(std::forward<T>(payload)...) {}
     };
 
@@ -147,11 +167,7 @@ namespace linalg {
     template <typename T, std::size_t COUNT>
     class RecursiveValueType<T, COUNT> {
     protected:
-        using MyType = T;
-
-    private:
-        template <std::size_t... IDX>
-        constexpr RecursiveValueType(SEQUENCE(IDX...), MyType* first) : data{ first[IDX]... } {} // clang reports past-the-end deref illegal for constexpr
+        using NestedArray = T;
 
     public:
         template <class Self>
@@ -163,7 +179,7 @@ namespace linalg {
         }
 
     protected:
-        constexpr RecursiveValueType(MyType&& first) : RecursiveValueType<T, COUNT>(MAKESEQUENCE(COUNT), &first) {}
+        constexpr RecursiveValueType(auto&&, auto&&... values) : data{ values... } {}
         constexpr RecursiveValueType(auto&&... payload) : data{ std::forward<T>(payload)... } {}
 
         T data[COUNT];
@@ -176,20 +192,27 @@ namespace linalg {
         static constexpr std::size_t COUNT = (DIMS * ... * 1uz);
     private:
         using Base = RecursiveValueType<T, COUNT, DIMS...>;
+
+        template <std::size_t NEXT = 1uz, std::size_t...>
+        static constexpr std::size_t getNext = NEXT;
+
     protected:
         using Base::Base;
+        using NestedArray = typename Base::NestedArray;
         using Base::data;
+
+        // Accessor addressing flat array of data, used internally to perform map
+        template <class Self>
+        constexpr decltype(auto) get(this Self&& self, std::size_t i) { return *(std::forward<Self>(self).data + i); }
 
         template <std::size_t..., class Self>
         constexpr decltype(auto) deref(this Self&& self, auto... inds) {
             return std::forward<COPYCONST(Self, Base)>(self).deref(0uz, inds...);
         }
 
-        // Accessor addressing flat array of data, used internally to perform map
-        template <class Self>
-        constexpr decltype(auto) get(this Self&& self, std::size_t i) { return *(std::forward<Self>(self).data + i); }
-
     public:
+        constexpr ValueType(NestedArray&& array) : Base(MAKESEQUENCE(getNext<DIMS...>), std::forward<NestedArray>(array)) {}
+
         // Iterators
         constexpr auto begin(this auto& self) { return Iterator<COPYCONST(decltype(self), T)>{ self.data }; }
         constexpr auto   end(this auto& self) { return Iterator<COPYCONST(decltype(self), T)>{ self.data + COUNT }; }
@@ -350,7 +373,7 @@ namespace linalg {
         // VECTOR SPECIALIZATIONS //
         ////////////////////////////
 
-        constexpr auto dot(this const isVector auto& self, const isVector auto& v) requires(self.count() == v.count()) {
+        constexpr auto dot(this const isVector auto& self, const isVector auto& v) requires(std::remove_cvref_t<decltype(self)>::COUNT == std::remove_cvref_t<decltype(v)>::COUNT) {
             return []<std::size_t... IDX>(const auto& v1, const auto& v2, SEQUENCE(IDX...)) constexpr {
                 return ((v1[IDX] * v2[IDX]) + ...);
             }(self, v, MAKESEQUENCE(COUNT));

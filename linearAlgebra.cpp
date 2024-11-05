@@ -7,31 +7,31 @@ using namespace std;
 
 
 void testVectors() {
-    auto v1 = linalg::Vector{{ 1.0, 2.0, 3.0 }};
-    cout << STR_EVAL(-v1) << "\t<- a 'value-type' vector that owns its data." << endl;
-    float reallyLongArray[] = { -1.0f, -3.0f, 0.0f, 1.0f, 4.2f, 3.9f, -33.0f, 0.003f, 14.0f, 0.0f, 0.0f, 22.0f };
-    auto v2 = linalg::VectorPtr<float, 3uz, -3z>{reallyLongArray + 8uz};
-    //                          type   size stride  parent        offset
-
-    // Pointer types
-    cout << STR_EVAL(v2) << "\t<- a 'pointer-type' vector that doesn't own.\nreallyLongArray=";
-    for (const auto &e : reallyLongArray)
-        cout << " " << e;
-    cout << endl;
-
-    for (auto &e : v2)
-        ++e;
-
-    cout << "incremented v2's elements.\nreallyLongArray=";
-    for (const auto &e : reallyLongArray)
-        cout << " " << e;
-    cout << endl;
-
-    // Utilities showcase
-    v2 -= v1;
-    cout << "v2-=v1; " STR_EVAL(v2) << "\t" << STR_EVAL(v2*4u) << "\t" << STR_EVAL(v1 + v2) << "\t" STR_EVAL(v1.cross(v2)) << "\t" STR_EVAL(v1.direction()) << endl;
-
-    cout << STR_EVAL(v1.map([](double a){ return a > 0.0; }).reduce([](bool a, bool b){ return a && b; })) << endl;
+//     auto v1 = linalg::Vector{{ 1.0, 2.0, 3.0 }};
+//     cout << STR_EVAL(-v1) << "\t<- a 'value-type' vector that owns its data." << endl;
+//     float reallyLongArray[] = { -1.0f, -3.0f, 0.0f, 1.0f, 4.2f, 3.9f, -33.0f, 0.003f, 14.0f, 0.0f, 0.0f, 22.0f };
+//     auto v2 = linalg::VectorPtr<float, 3uz, -3z>{reallyLongArray + 8uz};
+//     //                          type   size stride  parent        offset
+// 
+//     // Pointer types
+//     cout << STR_EVAL(v2) << "\t<- a 'pointer-type' vector that doesn't own.\nreallyLongArray=";
+//     for (const auto &e : reallyLongArray)
+//         cout << " " << e;
+//     cout << endl;
+// 
+//     for (auto &e : v2)
+//         ++e;
+// 
+//     cout << "incremented v2's elements.\nreallyLongArray=";
+//     for (const auto &e : reallyLongArray)
+//         cout << " " << e;
+//     cout << endl;
+// 
+//     // Utilities showcase
+//     v2 -= v1;
+//     cout << "v2-=v1; " STR_EVAL(v2) << "\t" << STR_EVAL(v2*4u) << "\t" << STR_EVAL(v1 + v2) << "\t" STR_EVAL(v1.cross(v2)) << "\t" STR_EVAL(v1.direction()) << endl;
+// 
+//     cout << STR_EVAL(v1.map([](double a){ return a > 0.0; }).reduce([](bool a, bool b){ return a && b; })) << endl;
 }
 
 void testMatrices() {
