@@ -43,76 +43,56 @@
 
 namespace linalg {
     // Helper macros to reduce clutter, undefined at end of namespace
-    #define COPYCONSTFORTYPE(T1, ...) std::conditional_t<std::is_const_v<std::remove_reference_t<T1>>, const __VA_ARGS__, __VA_ARGS__>
+    #define COPYCONST(T1, ...) std::conditional_t<std::is_const_v<std::remove_reference_t<T1>>, const __VA_ARGS__, __VA_ARGS__>
     #define MAKESEQUENCE(SIZE) std::make_index_sequence<SIZE>{}
     #define SEQUENCE(NAME) std::index_sequence<NAME>&&
+
+
+    template <class StorageBase, typename T, std::size_t... DIMS>
+    struct TensorType;
 
     ///////////////////
     // STORAGE TYPES //
     ///////////////////
 
     // Shared iterator type for for-each loops
-    template <typename QUALIFIEDTYPE, std::ptrdiff_t STRIDE = 1z>
+    template <typename QualifiedType, std::ptrdiff_t STRIDE = 1z>
     struct Iterator {
     public:
-        constexpr Iterator(QUALIFIEDTYPE* p) : pos(p) {}
+        constexpr Iterator(QualifiedType* p) : pos(p) {}
 
-        constexpr QUALIFIEDTYPE& operator*() { return *pos; }
+        constexpr QualifiedType& operator*() { return *pos; }
         constexpr auto operator++() { pos += STRIDE; return *this; }
         constexpr bool operator==(const Iterator& o) const = default;
 
     private:
-        QUALIFIEDTYPE* pos;
+        QualifiedType* pos;
     };
 
-    // Value type recursive primary template
-    template <typename T, std::size_t PRODUCT, std::size_t DIM = 0uz, std::size_t... REST>
-    class ValueTypeRecursive : ValueTypeRecursive<T, PRODUCT * DIM, REST...> {
-        using BASE = ValueTypeRecursive<T, PRODUCT * DIM, REST...>;
+    template <std::size_t...> class TList {};
+
+    // Reference type, transient type
+    template <class RefType, std::size_t C, std::size_t... DIMSTEPS>
+    struct ReferenceType {
     protected:
-        using MYTYPE = typename BASE::MYTYPE[DIM];
-        using BASE::data;
+        static constexpr std::size_t COUNT = C;
 
-    public:
-        constexpr ValueTypeRecursive(MYTYPE&& payload) : BASE(std::forward<typename BASE::MYTYPE>(*payload)) {}
-        constexpr ValueTypeRecursive(auto&&... payload) : BASE(std::forward<T>(payload)...) {}
-    };
-
-    // Value type recursive base-case class partial template specialization
-    template <typename T, std::size_t COUNT>
-    class ValueTypeRecursive<T, COUNT> {
-    protected:
-        using MYTYPE = T;
-
-    private:
-        template <std::size_t... IDX>
-        constexpr ValueTypeRecursive(SEQUENCE(IDX...), MYTYPE* first) : data{ first[IDX]... } {} // clang reports past-the-end deref illegal for constexpr
-
-    protected:
-        constexpr ValueTypeRecursive(MYTYPE&& first) : ValueTypeRecursive<T, COUNT>(MAKESEQUENCE(COUNT), &first) {}
-        constexpr ValueTypeRecursive(auto&&... payload) : data{ std::forward<T>(payload)... } {}
-
-        T data[COUNT];
-    };
-
-    // Top-level Value-type class
-    template <typename T, std::size_t... DIMS>
-    struct ValueType : ValueTypeRecursive<T, 1uz, DIMS...> {
-    private:
-        using BASE = ValueTypeRecursive<T, 1uz, DIMS...>;
-    protected:
-        using BASE::ValueTypeRecursive;
-        using BASE::data;
-        static constexpr std::size_t COUNT = (DIMS * ...);
-
-        // Accessor addressing flat array of data, used internally to perform map
-        template <class Self>
-        constexpr decltype(auto) get(this Self&& self, std::size_t i) { return *(std::forward<Self>(self).data + i); }
+        // // Accessor addressing flat array of data, used internally to perform map
+        // template <std::size_t FIRSTDIM, std::size_t... RESTDIMS, class Self>
+        // constexpr decltype(auto) get(this Self&& self, std::size_t i) {
+        //     
+        // }
 
     public:
         // Iterators
-        constexpr auto begin(this auto& self) { return Iterator<COPYCONSTFORTYPE(decltype(self), T)>{ self.data }; }
-        constexpr auto   end(this auto& self) { return Iterator<COPYCONSTFORTYPE(decltype(self), T)>{ self.data + COUNT }; }
+        // constexpr auto begin(this auto& self) { return Iterator<COPYCONST(decltype(self), T), STRIDE>{ self.data }; }
+        // constexpr auto   end(this auto& self) { return Iterator<COPYCONST(decltype(self), T), STRIDE>{ self.data + static_cast<std::ptrdiff_t>(COUNT) * STRIDE }; } // gcc warns if '*end()' would be OOB, even when it isn't dereffed
+
+        constexpr ReferenceType(RefType& r, std::size_t o) : ref(r), offset(o) {}
+
+    private:
+        RefType& ref;
+        std::size_t offset;
     };
 
     // Simple pointer type, takes user-supplied pointer and optional stride
@@ -127,8 +107,8 @@ namespace linalg {
 
     public:
         // Iterators
-        constexpr auto begin(this auto& self) { return Iterator<COPYCONSTFORTYPE(decltype(self), T), STRIDE>{ self.data }; }
-        constexpr auto   end(this auto& self) { return Iterator<COPYCONSTFORTYPE(decltype(self), T), STRIDE>{ self.data + static_cast<std::ptrdiff_t>(COUNT) * STRIDE }; } // gcc warns if '*end()' would be OOB, even when it isn't dereffed
+        constexpr auto begin(this auto& self) { return Iterator<COPYCONST(decltype(self), T), STRIDE>{ self.data }; }
+        constexpr auto   end(this auto& self) { return Iterator<COPYCONST(decltype(self), T), STRIDE>{ self.data + static_cast<std::ptrdiff_t>(COUNT) * STRIDE }; } // gcc warns if '*end()' would be OOB, even when it isn't dereffed
 
         constexpr PointerType(T* origin) : data(origin) {}
 
@@ -136,15 +116,88 @@ namespace linalg {
         T* data;
     };
 
-    // Reference type, transient type with no ref counting
-    // FIXME
+    // Value type recursive primary template
+    template <typename T, std::size_t COUNT, std::size_t DIM = 0uz, std::size_t... REST>
+    class RecursiveValueType : RecursiveValueType<T, COUNT, REST...> {
+        using Base = RecursiveValueType<T, COUNT, REST...>;
+        static constexpr std::size_t STEPSIZE = (REST * ... * 1uz);
+    protected:
+        using MyType = typename Base::MyType[DIM];
+        using Base::data;
+
+    public:
+        template <class Self>
+        constexpr decltype(auto) deref(this Self&& self, std::size_t index, auto first, auto... inds) {
+            return std::forward<COPYCONST(Self, Base)>(self).deref(index + (first * STEPSIZE), inds...);
+        }
+        template <class Self>
+        constexpr auto deref(this Self&& self, std::size_t index) {
+            return std::forward<COPYCONST(Self, Base)>(self).returnRef(index);
+        }
+        template <std::size_t... DIMS, std::size_t... STEPS, class Self>
+        constexpr auto returnRef(this Self&& self, std::size_t index, TList<DIMS...>&&, TList<STEPS...>&&) {
+            return std::forward<COPYCONST(Self, Base)>(self).returnRef(index, TList<>{DIMS..., DIM}, TList<STEPS..., STEPSIZE>{});
+        }
+
+        constexpr RecursiveValueType(MyType&& payload) : Base(std::forward<typename Base::MyType>(*payload)) {}
+        constexpr RecursiveValueType(auto&&... payload) : Base(std::forward<T>(payload)...) {}
+    };
+
+    // Value type recursive base-case class partial template specialization
+    template <typename T, std::size_t COUNT>
+    class RecursiveValueType<T, COUNT> {
+    protected:
+        using MyType = T;
+
+    private:
+        template <std::size_t... IDX>
+        constexpr RecursiveValueType(SEQUENCE(IDX...), MyType* first) : data{ first[IDX]... } {} // clang reports past-the-end deref illegal for constexpr
+
+    public:
+        template <class Self>
+        constexpr decltype(auto) deref(this Self&& self, std::size_t index) { return *(std::forward<Self>(self).data + index); }
+
+        template <std::size_t... DIMS, std::size_t... STEPS, class Self>
+        constexpr auto returnRef(this Self&& self, std::size_t index, TList<DIMS...>&&, TList<STEPS...>&&) {
+            return TensorType<ReferenceType<Self, STEPS...>, T, DIMS...>(std::forward<Self>(self), index);
+        }
+
+    protected:
+        constexpr RecursiveValueType(MyType&& first) : RecursiveValueType<T, COUNT>(MAKESEQUENCE(COUNT), &first) {}
+        constexpr RecursiveValueType(auto&&... payload) : data{ std::forward<T>(payload)... } {}
+
+        T data[COUNT];
+    };
+
+    // Top-level Value-type class
+    template <typename T, std::size_t... DIMS>
+    struct ValueType : RecursiveValueType<T, (DIMS * ... * 1uz), DIMS...> {
+    protected:
+        static constexpr std::size_t COUNT = (DIMS * ... * 1uz);
+    private:
+        using Base = RecursiveValueType<T, COUNT, DIMS...>;
+    protected:
+        using Base::Base;
+        using Base::data;
+
+        template <std::size_t..., class Self>
+        constexpr decltype(auto) deref(this Self&& self, auto... inds) {
+            return std::forward<COPYCONST(Self, Base)>(self).deref(0uz, inds...);
+        }
+
+        // Accessor addressing flat array of data, used internally to perform map
+        template <class Self>
+        constexpr decltype(auto) get(this Self&& self, std::size_t i) { return *(std::forward<Self>(self).data + i); }
+
+    public:
+        // Iterators
+        constexpr auto begin(this auto& self) { return Iterator<COPYCONST(decltype(self), T)>{ self.data }; }
+        constexpr auto   end(this auto& self) { return Iterator<COPYCONST(decltype(self), T)>{ self.data + COUNT }; }
+    };
 
     ////////////
     // TENSOR //
     ////////////
-
-    template <class StorageBase, typename T, std::size_t... DIMS>
-    struct TensorType;
 
     // Convenience aliases
     template <typename T, std::size_t... DIMS>
@@ -185,7 +238,6 @@ namespace linalg {
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3, std::size_t D4, std::size_t D5, std::size_t D6, std::size_t D7, std::size_t D8, std::size_t D9>
     TensorType(T (&&)[D0][D1][D2][D3][D4][D5][D6][D7][D8][D9]) -> TensorType<ValueType<T, D0, D1, D2, D3, D4, D5, D6, D7, D8, D9>, T, D0, D1, D2, D3, D4, D5, D6, D7, D8, D9>;
 
-    // TensorType definition
     template <class StorageBase, typename T, std::size_t... DIMS>
     struct TensorType final : StorageBase {
     private:
@@ -274,23 +326,24 @@ namespace linalg {
         // Accessor
         template <class Self>
         constexpr decltype(auto) operator[](this Self&& self, auto first, auto... inds) requires (sizeof...(inds) < sizeof...(DIMS)) {
-            return []<std::size_t STEP, std::size_t NEXTDIM, std::size_t... RESTDIMS>(this auto getTensor, Self&& self, std::ptrdiff_t offset, auto nextInd, auto... restInds) constexpr {
-                constexpr std::size_t THISSTEP = STEP / NEXTDIM;
-                if constexpr (std::is_same_v<decltype(nextInd), char>) { // nextInd is a wildcard
-                    if constexpr (sizeof...(restInds))      // there are more indices after this wildcard
-                        return 666;
-                    else                                    // trailing wildcards do nothing
-                        return std::forward<Self>(self);
-                } else {
-                    offset += THISSTEP * static_cast<std::size_t>(nextInd);
-                    if constexpr (sizeof...(restInds))      // more constraints to get through
-                        return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), offset, restInds...);
-                    else if constexpr (sizeof...(RESTDIMS)) // there are unconstrained dimensions TODO reuse something rather than fold?
-                        return TensorType<PointerType<COPYCONSTFORTYPE(Self, T), (RESTDIMS * ...)>, COPYCONSTFORTYPE(Self, T), RESTDIMS...>{ std::forward<Self>(self).data + offset };
-                    else                                    // the final dimension is constrained, return the value
-                        return *(std::forward<Self>(self).data + offset); //TODO need to use storagetype here
-                }
-            }.template operator()<COUNT, DIMS...>(std::forward<Self>(self), 0z, first, inds...);
+            return std::forward<Self>(self).template deref<DIMS...>(first, inds...);
+            // return []<std::size_t STEP, std::size_t NEXTDIM, std::size_t... RESTDIMS>(this auto getTensor, Self&& self, std::ptrdiff_t offset, auto nextInd, auto... restInds) constexpr {
+            //     constexpr std::size_t THISSTEP = STEP / NEXTDIM;
+            //     if constexpr (std::is_same_v<decltype(nextInd), char>) { // nextInd is a wildcard
+            //         if constexpr (sizeof...(restInds))      // there are more indices after this wildcard
+            //             return 666;
+            //         else                                    // trailing wildcards do nothing
+            //             return std::forward<Self>(self);
+            //     } else {
+            //         offset += THISSTEP * static_cast<std::size_t>(nextInd);
+            //         if constexpr (sizeof...(restInds))      // more constraints to get through
+            //             return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), offset, restInds...);
+            //         else if constexpr (sizeof...(RESTDIMS)) // there are unconstrained dimensions TODO reuse something rather than fold?
+            //             return TensorType<PointerType<COPYCONST(Self, T), (RESTDIMS * ...)>, COPYCONST(Self, T), RESTDIMS...>{ std::forward<Self>(self).data + offset };
+            //         else                                    // the final dimension is constrained, return the value
+            //             return *(std::forward<Self>(self).data + offset); //TODO need to use storagetype here
+            //     }
+            // }.template operator()<COUNT, DIMS...>(std::forward<Self>(self), 0z, first, inds...);
         }
 
         ////////////////////////////
@@ -333,7 +386,7 @@ namespace linalg {
 
         // template <class MYTYPE>
         // constexpr auto getDiagonal(this MYTYPE& self) {
-        //     return VectorBase<COPYCONSTFORTYPE(MYTYPE, T), std::min(M, N), (N + 1z) * S, ReferenceType>{ self.data };
+        //     return VectorBase<COPYCONST(MYTYPE, T), std::min(M, N), (N + 1z) * S, ReferenceType>{ self.data };
         // }
     };
 

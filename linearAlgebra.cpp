@@ -43,9 +43,15 @@ void testMatrices() {
     //                                                        { 1, 0, 1 },
     //                                                        { 0, 1, 0 },
     //                                                        { 1, 0, 1 } } };
-    // cout << m2 << "\n" << endl;
+    constexpr auto m2 = linalg::Matrix<float, 5uz, 3uz>{ { { 0, 1, 2 },
+                                                           { 3, 4, 5 },
+                                                           { 6, 7, 8 },
+                                                           { 9,10,11 },
+                                                           {12,13,14 } } };
+    cout << m2 << "\n" << endl;
 
-    // cout << "\n" << m2[' ', 1uz] << endl;
+    // m2[3uz, 2uz] = 0.0f;
+    // cout << m2 << "\n" << endl;
 
     // constexpr auto m3 = m1 * m2;
     // cout << "constexpr " LINE_EVAL(m3) << endl;
@@ -54,11 +60,11 @@ void testMatrices() {
     // constexpr linalg::Vector v1{linalg::TensorBase<linalg::ValueType, 1z, float, 4uz>{ 2.0f, 1.0f, 0.0f, -1.0f }};
     // cout << STR_EVAL(v1) << endl;
 
-    auto m5 = linalg::Matrix<unsigned, 5uz, 5uz>::Identity();
+    // auto m5 = linalg::Matrix<unsigned, 5uz, 5uz>::Identity();
     // m5.getRow(3uz) += linalg::Vector<uint32_t, 5uz>{ 4u };
     // m5.getRow(0uz) = m5.getCol(4uz);
     // m5.getDiagonal() *= 3u;
-    cout << LINE_EVAL(m5) << endl;
+    // cout << LINE_EVAL(m5) << endl;
 }
 
 void testTensors() {
