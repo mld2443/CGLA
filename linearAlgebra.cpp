@@ -35,14 +35,14 @@ void testVectors() {
 }
 
 void testMatrices() {
-    // constexpr auto m1 = linalg::Matrix<double, 2uz, 5uz>{ { { 1.0, 0.0, 1.0, 0.0, 1.0 },
-    //                                                         { 0.0, 1.0, 0.0, 1.0, 0.0 } } };
+    // constexpr auto m1 = linalg::Matrix<double, 2uz, 5uz>{ 1.0, 0.0, 1.0, 0.0, 1.0,
+    //                                                       0.0, 1.0, 0.0, 1.0, 0.0 };
     // cout << m1 << "\n" << endl;
-    constexpr auto m2 = linalg::Matrix<float, 5uz, 3uz>{ { { 1, 0, 1 },
-                                                           { 0, 1, 0 },
-                                                           { 1, 0, 1 },
-                                                           { 0, 1, 0 },
-                                                           { 1, 0, 1 } } };
+    constexpr auto m2 = linalg::Matrix<float, 5uz, 3uz>{ 1, 0, 1,
+                                                         0, 1, 0,
+                                                         1, 0, 1,
+                                                         0, 1, 0,
+                                                         1, 0, 1 };
     cout << m2 << "\n" << endl;
 
     // cout << "\n" << m2[' ', 1uz] << endl;
@@ -63,7 +63,10 @@ void testMatrices() {
 
 void testTensors() {
     // Massive 6-dimensional multilinear tensor
-    [[maybe_unused]] constexpr auto tensor1 = linalg::Tensor{
+#ifndef __clang__
+    constexpr
+#endif
+    auto tensor1 = linalg::Tensor{
         {{{{{{  0,  1,  2},
              {  3,  4,  5}},
                 {{  6,  7,  8},
@@ -145,8 +148,11 @@ void testTensors() {
     };
 
     // Test for compile-time evaluation
-    //static_assert(tensor1[0][2, 1, 0][0, 1] > 0);
-    //cout << LINE_EVAL(tensor1) << "\n" STR_EVAL(sizeof(tensor1)) << "\n" STR_EVAL(tensor1[0, 2, 1, 0, 0, 1]) << "\n" STR_EVAL(tensor1[0][2][1][0][0][1]) << endl;
+#ifndef __clang__
+    static_assert(tensor1[0][2, 1, 0][0, 1] > 0);
+#endif
+    cout << tensor1[0][2, 1, 0][0, 1] << endl;
+    // cout << LINE_EVAL(tensor1) << "\n" STR_EVAL(sizeof(tensor1)) << "\n" STR_EVAL(tensor1[0, 2, 1, 0, 0, 1]) << "\n" STR_EVAL(tensor1[0][2][1][0][0][1]) << endl;
 }
 
 //////////
