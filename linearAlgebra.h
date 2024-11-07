@@ -95,8 +95,9 @@ namespace linalg {
         using NestedArray = typename Base::NestedArray[DIM];
         using Base::data;
 
-        template <std::size_t NEXT = 1uz, std::size_t...>
-        static constexpr std::size_t getNext = NEXT;
+#if defined(__clang__)
+        template <std::size_t NEXT = 1uz, std::size_t... REMAINING>
+        static constexpr std::size_t getExpand = COUNT / (REMAINING * ... * 1uz);
 
     private:
         // Helper to flatten the nested input array pack
@@ -110,9 +111,12 @@ namespace linalg {
 
     protected:
         template <std::size_t... IDX>
-        constexpr RecursiveValueType(SEQUENCE(IDX...), auto&&... arrays) : Base(MAKESEQUENCE(DIM * getNext<REST...>), getNth<IDX / DIM>(std::forward<NestedArray>(arrays)...)[IDX % DIM]...) {}
-
+        constexpr RecursiveValueType(SEQUENCE(IDX...), auto&&... arrays) : Base(MAKESEQUENCE(getExpand<REST...>), getNth<IDX / DIM>(std::forward<NestedArray>(arrays)...)[IDX % DIM]...) {}
+#endif
     public:
+#if !defined(__clang__)
+        constexpr RecursiveValueType(NestedArray&& payload) : Base(std::forward<typename Base::NestedArray>(*payload)) {}
+#endif
         constexpr RecursiveValueType(auto&&... payload) : Base(std::forward<T>(payload)...) {}
     };
 
@@ -122,8 +126,16 @@ namespace linalg {
     protected:
         using NestedArray = T;
 
+#if !defined(__clang__)
+    private:
+        template <std::size_t... IDX>
+        constexpr RecursiveValueType(SEQUENCE(IDX...), NestedArray* first) : data{ first[IDX]... } {} // clang reports past-the-end deref illegal for constexpr
+
     protected:
+        constexpr RecursiveValueType(NestedArray&& first) : RecursiveValueType<T, COUNT>(MAKESEQUENCE(COUNT), &first) {}
+#else
         constexpr RecursiveValueType(auto&&, auto&&... values) : data{ values... } {}
+#endif
         constexpr RecursiveValueType(auto&&... payload) : data{ std::forward<T>(payload)... } {}
 
         T data[COUNT];
@@ -137,8 +149,10 @@ namespace linalg {
     private:
         using Base = RecursiveValueType<T, COUNT, DIMS...>;
 
+#if defined(__clang__)
         template <std::size_t NEXT = 1uz, std::size_t...>
         static constexpr std::size_t getNext = NEXT;
+#endif
 
     protected:
         using Base::Base;
@@ -150,8 +164,9 @@ namespace linalg {
         constexpr decltype(auto) get(this Self&& self, std::size_t i) { return *(std::forward<Self>(self).data + i); }
 
     public:
+#if defined(__clang__)
         constexpr ValueType(NestedArray&& array) : Base(MAKESEQUENCE(getNext<DIMS...>), std::forward<NestedArray>(array)) {}
-
+#endif
         // Iterators
         constexpr auto begin(this auto& self) { return Iterator<COPYCONST(decltype(self), T)>{ self.data }; }
         constexpr auto   end(this auto& self) { return Iterator<COPYCONST(decltype(self), T)>{ self.data + COUNT }; }
