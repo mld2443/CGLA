@@ -43,12 +43,12 @@ void testMatrices() {
     //                                                      1, 0, 1,
     //                                                      0, 1, 0,
     //                                                      1, 0, 1 };
-    constexpr auto m2 = linalg::Matrix<float, 5uz, 3uz>{  0,  1,  2,
-                                                          3,  4,  5,
-                                                          6,  7,  8,
-                                                          9, 10, 11,
-                                                         12, 13, 14 };
-    cout << m2 << "\n" << endl;
+    // constexpr auto m2 = linalg::Matrix<float, 5uz, 3uz>{  0,  1,  2,
+    //                                                       3,  4,  5,
+    //                                                       6,  7,  8,
+    //                                                       9, 10, 11,
+    //                                                      12, 13, 14 };
+    // cout << m2[' ', 0] << "\n" << endl;
 
     // m2[3uz, 2uz] = 0.0f;
     // cout << m2 << "\n" << endl;
@@ -153,11 +153,12 @@ void testTensors() {
                          {213,214,215}}}}}}
     };
 
+    cout << tensor1[1, '*', 1, '*', 1, '*'] << endl;
+
     // Test for compile-time evaluation
 #ifndef __clang__
     //static_assert(tensor1[0][2, 1, 0][0, 1] > 0);
 #endif
-    cout << tensor1[0, 2, 1, 0, 0, 1] << endl;
     // cout << LINE_EVAL(tensor1) << "\n" STR_EVAL(sizeof(tensor1)) << "\n" STR_EVAL(tensor1[0, 2, 1, 0, 0, 1]) << "\n" STR_EVAL(tensor1[0][2][1][0][0][1]) << endl;
 }
 
@@ -166,8 +167,8 @@ void testTensors() {
 //////////
 int main() {
     // testVectors();
-    testMatrices();
-    // testTensors();
+    // testMatrices();
+    testTensors();
 
     return 0;
 }

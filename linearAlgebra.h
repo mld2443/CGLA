@@ -72,16 +72,43 @@ namespace linalg {
     template <std::size_t...> class TList {};
 
     // Reference type, transient type
-    template <class RefType, std::size_t C, std::size_t... DIMSTEPS>
+    template <class RefType, std::size_t C, std::size_t... STEPS>
     struct ReferenceType {
     protected:
         static constexpr std::size_t COUNT = C;
+        static constexpr bool ISREF = true;
 
-        // // Accessor addressing flat array of data, used internally to perform map
-        // template <std::size_t FIRSTDIM, std::size_t... RESTDIMS, class Self>
-        // constexpr decltype(auto) get(this Self&& self, std::size_t i) {
-        //     
-        // }
+        template <class Storage, typename T, std::size_t... DIMS> requires(sizeof...(DIMS) == sizeof...(STEPS))
+        constexpr decltype(auto) get(this const TensorType<Storage, T, DIMS...>& self, std::size_t i) {
+            static constexpr std::size_t DIMSARR[sizeof...(DIMS)] = { DIMS... };
+            static constexpr std::size_t STEPARR[sizeof...(STEPS)] = { STEPS... };
+
+            return self.ref.get([]<std::size_t LASTSTEP, std::size_t INDEX>(this auto translateIndex, std::size_t i, std::size_t accum) constexpr {
+                constexpr std::size_t THISSTEP = LASTSTEP / DIMSARR[INDEX];
+                if constexpr (INDEX + 1uz < sizeof...(DIMS))
+                    return translateIndex.template operator()<THISSTEP, INDEX + 1uz>(i % THISSTEP, accum + STEPARR[INDEX] * (i / THISSTEP));
+                else
+                    return accum + STEPARR[INDEX] * (i / THISSTEP);
+            }.template operator()<std::remove_cvref_t<decltype(self)>::COUNT, 0uz>(i, self.offset));
+        }
+        template <class Storage, typename T, std::size_t... DIMS> requires(sizeof...(DIMS) == sizeof...(STEPS))
+        constexpr decltype(auto) get(this TensorType<Storage, T, DIMS...>& self, std::size_t i) {
+            static constexpr std::size_t DIMSARR[sizeof...(DIMS)] = { DIMS... };
+            static constexpr std::size_t STEPARR[sizeof...(STEPS)] = { STEPS... };
+
+            return self.ref.get([]<std::size_t LASTSTEP, std::size_t INDEX>(this auto translateIndex, std::size_t i, std::size_t accum) constexpr {
+                constexpr std::size_t THISSTEP = LASTSTEP / DIMSARR[INDEX];
+                if constexpr (INDEX + 1uz < sizeof...(DIMS))
+                    return translateIndex.template operator()<THISSTEP, INDEX + 1uz>(i % THISSTEP, accum + STEPARR[INDEX] * (i / THISSTEP));
+                else
+                    return accum + STEPARR[INDEX] * (i / THISSTEP);
+            }.template operator()<std::remove_cvref_t<decltype(self)>::COUNT, 0uz>(i, self.offset));
+        }
+
+        template <std::size_t DIMS>
+        constexpr auto deref(this auto&& , auto , auto... ) {
+            return 0;
+        }
 
     public:
         // Iterators
@@ -90,7 +117,7 @@ namespace linalg {
 
         constexpr ReferenceType(RefType& r, std::size_t o) : ref(r), offset(o) {}
 
-    private:
+    protected:
         RefType& ref;
         std::size_t offset;
     };
@@ -100,16 +127,11 @@ namespace linalg {
     struct PointerType {
     protected:
         static constexpr std::size_t COUNT = C;
+        static constexpr bool ISREF = false;
 
-        // Accessor addressing flat array of data, used internally to perform map
-        template <class Self>
-        constexpr decltype(auto) get(this Self&& self, std::size_t i) { return *(std::forward<Self>(self).data + static_cast<std::ptrdiff_t>(i) * STRIDE); }
+        constexpr decltype(auto) get(this auto&& self, std::size_t i) { return *(self.data + static_cast<std::ptrdiff_t>(i) * STRIDE); }
 
     public:
-        // constexpr auto deref(auto , auto... ) {
-        //     return T();
-        // }
-
         // Iterators
         constexpr auto begin(this auto& self) { return Iterator<COPYCONST(decltype(self), T), STRIDE>{ self.data }; }
         constexpr auto   end(this auto& self) { return Iterator<COPYCONST(decltype(self), T), STRIDE>{ self.data + static_cast<std::ptrdiff_t>(COUNT) * STRIDE }; } // gcc warns if '*end()' would be OOB, even when it isn't dereffed
@@ -155,6 +177,7 @@ namespace linalg {
     struct ValueType : RecursiveValueType<T, (DIMS * ... * 1uz), DIMS...> {
     protected:
         static constexpr std::size_t COUNT = (DIMS * ... * 1uz);
+        static constexpr bool ISREF = false;
     private:
         using Base = RecursiveValueType<T, COUNT, DIMS...>;
 
@@ -163,14 +186,7 @@ namespace linalg {
         using NestedArray = typename Base::NestedArray;
         using Base::data;
 
-        // Accessor addressing flat array of data, used internally to perform map
-        template <class Self>
-        constexpr decltype(auto) get(this Self&& self, std::size_t i) { return *(std::forward<Self>(self).data + i); }
-
-        template <std::size_t..., class Self>
-        constexpr decltype(auto) deref(this Self&& self, auto... inds) {
-            return std::forward<COPYCONST(Self, Base)>(self).deref(0uz, inds...);
-        }
+        constexpr decltype(auto) get(this auto&& self, std::size_t i) { return *(self.data + i); }
 
     public:
         // Iterators
@@ -224,21 +240,23 @@ namespace linalg {
     template <class StorageBase, typename T, std::size_t... DIMS>
     struct TensorType final : StorageBase {
     private:
-        template <class OtherBase, typename T2, std::size_t... DIMS2>
-        friend struct TensorType; // Needed for operator type independence
+        template <class, std::size_t, std::size_t...>
+        friend struct ReferenceType;
+        template <class, typename, std::size_t...>
+        friend struct TensorType; // Allows different instantiations to use protected get()
         friend StorageBase;       // Needed for StorageBase to be able to access its own methods while using explicit this
-        template <class STORAGETYPE2, typename T2, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
-        friend constexpr std::ostream& operator<<(std::ostream& os, const TensorType<STORAGETYPE2, T2, FIRSTDIM, RESTDIMS...>& t);
+        template <class OtherBase, typename T2, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
+        friend constexpr std::ostream& operator<<(std::ostream& os, const TensorType<OtherBase, T2, FIRSTDIM, RESTDIMS...>& t);
         using StorageBase::COUNT;
-        using StorageBase::get;
+        using StorageBase::get;   // Accessor addressing flat array of data, used internally to perform map
 
-        // Special 'template container' prettyPrint() uses to build compile-time whitespace
-        template <char... STR> struct String { static constexpr char VALUES[] = {STR..., '\0'}; };
+        // Special 'template containers' prettyPrint() uses to build compile-time whitespace
+        template <char... Cs> struct TString { static constexpr char STR[] = {Cs..., '\0'}; };
 
         // Helper for operator<<, displays arbitrary dimensional tensors in a human-readable format
         template <std::size_t STEP, std::size_t THISDIM, std::size_t NEXTDIM = 0uz, std::size_t... RESTDIMS, char... PRFX, std::size_t... IDX>
-        constexpr void prettyPrint(std::ostream& os, SEQUENCE(IDX...), std::size_t offset = 0uz, String<PRFX...> prefix = {}) const {
-            auto genSpace = []<std::size_t... IDX2>(SEQUENCE(IDX2...)) constexpr { return String<PRFX..., (' ' + static_cast<char>(0uz & IDX2))...>(); };
+        constexpr void prettyPrint(std::ostream& os, SEQUENCE(IDX...), std::size_t offset = 0uz, TString<PRFX...> prefix = {}) const {
+            auto genSpace = []<std::size_t... IDX2>(SEQUENCE(IDX2...)) constexpr { return TString<PRFX..., (' ' + static_cast<char>(0uz & IDX2))...>(); };
 
             constexpr size_t DIMSREMAINING = sizeof...(RESTDIMS) + (NEXTDIM > 0uz) + 1uz;
             if constexpr (DIMSREMAINING > 3uz && DIMSREMAINING % 3uz != 0uz )
@@ -247,9 +265,9 @@ namespace linalg {
             if constexpr (DIMSREMAINING % 3uz == 0uz)
                 (prettyPrint<STEP / NEXTDIM, NEXTDIM, RESTDIMS...>(os, MAKESEQUENCE(NEXTDIM), offset + IDX * STEP, genSpace(MAKESEQUENCE(((DIMSREMAINING - 3uz) ? (DIMSREMAINING - 3uz) : 3uz) * IDX))), ...);
             else if constexpr (NEXTDIM)
-                (prettyPrint<STEP / NEXTDIM, NEXTDIM, RESTDIMS...>(os, MAKESEQUENCE(NEXTDIM), offset + IDX * STEP, String<PRFX...>{}), ...);
+                (prettyPrint<STEP / NEXTDIM, NEXTDIM, RESTDIMS...>(os, MAKESEQUENCE(NEXTDIM), offset + IDX * STEP, TString<PRFX...>{}), ...);
             else {
-                os << (offset ? "\n" : "") << prefix.VALUES;
+                os << (offset ? "\n" : "") << prefix.STR;
                 ((os << (IDX ? ", " : "") << get(offset + IDX)), ...) << ((offset + THISDIM < COUNT) ? "," : "");
             }
         }
@@ -306,28 +324,35 @@ namespace linalg {
         inline auto& operator-=(const auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 -= e2; }, t, MAKESEQUENCE(COUNT)); return *this; }
         inline auto& operator= (const auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 =  e2; }, t, MAKESEQUENCE(COUNT)); return *this; }
 
-        // Accessor
+        // Accessor, with support for slicing and currying into reference "subtensors"
         template <class Self>
         constexpr decltype(auto) operator[](this Self&& self, auto first, auto... inds) requires (sizeof...(inds) < sizeof...(DIMS)) {
-            // return std::forward<Self>(self).template deref<DIMS...>(first, inds...);
-            // return []<std::size_t STEP, std::size_t NEXTDIM, std::size_t... RESTDIMS>(this auto getTensor, Self&& self, std::ptrdiff_t offset, auto nextInd, auto... restInds) constexpr {
-            //     constexpr std::size_t THISSTEP = STEP / NEXTDIM;
-            //     if constexpr (std::is_same_v<decltype(nextInd), char>) { // nextInd is a wildcard
-            //         if constexpr (sizeof...(restInds))      // there are more indices after this wildcard
-            //             return 666;
-            //         else                                    // trailing wildcards do nothing
-            //             return std::forward<Self>(self);
-            //     } else {
-            //         offset += THISSTEP * static_cast<std::size_t>(nextInd);
-            //         if constexpr (sizeof...(restInds))      // more constraints to get through
-            //             return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), offset, restInds...);
-            //         else if constexpr (sizeof...(RESTDIMS)) // there are unconstrained dimensions TODO reuse something rather than fold?
-            //             return TensorType<PointerType<COPYCONST(Self, T), (RESTDIMS * ...)>, COPYCONST(Self, T), RESTDIMS...>{ std::forward<Self>(self).data + offset };
-            //         else                                    // the final dimension is constrained, return the value
-            //             return *(std::forward<Self>(self).data + offset); //TODO need to use storagetype here
-            //     }
-            // }.template operator()<COUNT, DIMS...>(std::forward<Self>(self), 0z, first, inds...);
-            return 0;
+            if constexpr (std::remove_cvref_t<decltype(self)>::ISREF)
+                return self.template deref<DIMS...>(first, inds...);
+            else
+                return []<std::size_t STEP, std::size_t NEXTDIM, std::size_t... RESTDIMS, std::size_t... STEPS, std::size_t... NEWDIMS>(this auto getTensor,
+                                        Self&& self, std::size_t offset, TList<STEPS...>&&, TList<NEWDIMS...>&&,
+                                        auto nextInd, auto... restInds) constexpr -> decltype(auto) {
+                    constexpr std::size_t THISSTEP = STEP / NEXTDIM;
+                    if constexpr (std::is_same_v<decltype(nextInd), char>) { // nextInd is a wildcard
+                        if constexpr (sizeof...(restInds))      // more indices after this wildcard
+                            return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), offset, TList<STEPS..., THISSTEP>{}, TList<NEWDIMS..., NEXTDIM>{}, restInds...);
+                        else if constexpr (sizeof...(RESTDIMS)) // generatr the rest of the bounds
+                            return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), offset, TList<STEPS..., THISSTEP>{}, TList<NEWDIMS..., NEXTDIM>{}, '*');
+                        else
+                            return TensorType<ReferenceType<Self, (NEWDIMS * ... * NEXTDIM), STEPS..., 1uz>, T, NEWDIMS..., NEXTDIM>(std::forward<Self>(self), offset);
+                    } else {
+                        offset += THISSTEP * static_cast<std::size_t>(nextInd);
+                        if constexpr (sizeof...(restInds))      // more constraints to get through and/or there are unconstrained dimensions
+                            return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), offset, TList<STEPS...>{}, TList<NEWDIMS...>{}, restInds...);
+                        else if constexpr (sizeof...(RESTDIMS)) // more constraints to get through and/or there are unconstrained dimensions
+                            return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), offset, TList<STEPS...>{}, TList<NEWDIMS...>{}, '*');
+                        else if constexpr (sizeof...(STEPS))    // there were wildcards, but all indices were explicit
+                            return TensorType<ReferenceType<Self, (NEWDIMS * ...), STEPS...>, T, NEWDIMS...>(std::forward<Self>(self), offset);
+                        else                                    // fully constrained, return value
+                            return *(self.data + offset);
+                    }
+                }.template operator()<COUNT, DIMS...>(std::forward<Self>(self), 0z, {}, {}, first, inds...);
         }
 
         ////////////////////////////
@@ -368,9 +393,10 @@ namespace linalg {
             }(self, m, MAKESEQUENCE(M*O));
         }
 
-        // template <class MYTYPE>
-        // constexpr auto getDiagonal(this MYTYPE& self) {
-        //     return VectorBase<COPYCONST(MYTYPE, T), std::min(M, N), (N + 1z) * S, ReferenceType>{ self.data };
+        // template <class Self>
+        // constexpr auto getDiagonal(this Self& self) requires(Self::dimensionality() > 1uz) {
+        //     auto getVec = []<>() constexpr {};
+        //     return Vector<COPYCONST(MYTYPE, T), std::min(M, N), (N + 1z) * S, ReferenceType>{ self.data };
         // }
     };
 
