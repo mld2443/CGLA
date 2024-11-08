@@ -40,6 +40,7 @@
 #include <iostream>    // ostream
 #include <type_traits> // conditional_t, is_const_v, remove_reference_t
 #include <utility>     // forward, index_sequence, make_index_sequence
+#include <algorithm>   // min
 
 namespace linalg {
     // Helper macros to reduce clutter, undefined at end of namespace
@@ -306,6 +307,12 @@ namespace linalg {
         // Constructors
         using StorageBase::StorageBase;
 
+        static constexpr auto broadcast(T&& value) {
+            return [&]<std::size_t... IDX>(SEQUENCE(IDX...)) constexpr {
+                return TensorType<StorageBase, T, DIMS...>{ value + T(IDX & 0uz)... };
+            }(MAKESEQUENCE(COUNT));
+        }
+
         // Metadata
         static constexpr std::size_t count()          { return COUNT; }
         static constexpr std::size_t dimensionality() { return sizeof...(DIMS); }
@@ -403,25 +410,36 @@ namespace linalg {
             }.template operator()<DIMS...>(MAKESEQUENCE(COUNT));
         }
 
-        template<typename T2, std::size_t M, std::size_t N, std::size_t O, class OtherStorage>
-        constexpr auto operator*(this const Matrix<T, M, N, StorageBase>& self, const Matrix<T2, N, O, OtherStorage>& m) {
-            return []<std::size_t... IDX>(const auto& m1, const auto& m2, SEQUENCE(IDX...)) constexpr {
-                return Matrix<decltype(T()*T2()), M, O>{ m1[IDX / O].dot(m2[' '][IDX % O])... };
-            }(self, m, MAKESEQUENCE(M*O));
+        constexpr decltype(auto) getRow(this isMatrix auto& self, std::size_t r) { return self[r]; }
+        constexpr decltype(auto) getCol(this isMatrix auto& self, std::size_t c) { return self['*', c]; }
+        template <class Self>
+        constexpr decltype(auto) getDiagonal(this Self& self) requires(std::remove_cvref_t<Self>::dimensionality() > 1uz) {
+            constexpr std::size_t SMALLEST = []<std::size_t D0, std::size_t D1, std::size_t... REST>(this auto minimum) constexpr {
+                constexpr std::size_t THISMIN = std::min(D0, D1);
+                if constexpr (sizeof...(REST)) return minimum.template operator()<THISMIN, REST...>();
+                else                           return THISMIN;
+            }.template operator()<DIMS...>();
+            constexpr std::size_t STRIDE = []<std::size_t PRODUCT, std::size_t, std::size_t... REST>(this auto calcStride) constexpr {
+                if constexpr (sizeof...(REST)) return calcStride.template operator()<PRODUCT + (REST * ...), REST...>();
+                else                           return PRODUCT;
+            }.template operator()<1uz, DIMS...>();
+
+            return TensorType<ReferenceType<Self, SMALLEST, SMALLEST, STRIDE>, COPYCONST(Self, T), SMALLEST>{ self, 0uz };
         }
 
-        // template <class Self>
-        // constexpr auto getDiagonal(this Self& self) requires(Self::dimensionality() > 1uz) {
-        //     auto getVec = []<>() constexpr {};
-        //     return Vector<COPYCONST(MYTYPE, T), std::min(M, N), (N + 1z) * S, ReferenceType>{ self.data };
-        // }
+        template<typename T2, std::size_t M, std::size_t N, std::size_t O, class OtherStorage>
+        constexpr auto operator*(this const Matrix<T, M, N, StorageBase>& self, const Matrix<T2, N, O, OtherStorage>& m) requires isMatrix<std::remove_cvref_t<decltype(self)>> && isMatrix<std::remove_cvref_t<decltype(m)>> {
+            return []<std::size_t... IDX>(const auto& m1, const auto& m2, SEQUENCE(IDX...)) constexpr {
+                return Matrix<decltype(T()*T2()), M, O>{ m1.getRow(IDX / O).dot(m2.getCol(IDX % O))... };
+            }(self, m, MAKESEQUENCE(M*O));
+        }
     };
 
     // Right-side operator overloads
-    template <class StorageBase, typename T, std::size_t... DIMS>
-    constexpr auto operator*(const T& s, const TensorType<StorageBase, T, DIMS...> &t) { return t.map([&s](const T& e) { return e * s; }); }
-    template <class StorageBase, typename T, std::size_t... DIMS>
-    constexpr auto operator/(const T& s, const TensorType<StorageBase, T, DIMS...> &t) { return t.map([&s](const T& e) { return e / s; }); }
+    template <typename T, class StorageBase, typename T2, std::size_t... DIMS>
+    constexpr auto operator*(const T& s, const TensorType<StorageBase, T2, DIMS...> &t) { return t.map([&s](const T& e) { return e * s; }); }
+    template <typename T, class StorageBase, typename T2, std::size_t... DIMS>
+    constexpr auto operator/(const T& s, const TensorType<StorageBase, T2, DIMS...> &t) { return t.map([&s](const T& e) { return e / s; }); }
     template <class StorageBase, typename T, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
     constexpr std::ostream& operator<<(std::ostream& os, const TensorType<StorageBase, T, FIRSTDIM, RESTDIMS...>& t) {
         t.template prettyPrint<(RESTDIMS * ... * 1uz), FIRSTDIM, RESTDIMS...>(os, MAKESEQUENCE(FIRSTDIM));
