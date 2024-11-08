@@ -7,31 +7,31 @@ using namespace std;
 
 
 void testVectors() {
-//     auto v1 = linalg::Vector{{ 1.0, 2.0, 3.0 }};
-//     cout << STR_EVAL(-v1) << "\t<- a 'value-type' vector that owns its data." << endl;
-//     float reallyLongArray[] = { -1.0f, -3.0f, 0.0f, 1.0f, 4.2f, 3.9f, -33.0f, 0.003f, 14.0f, 0.0f, 0.0f, 22.0f };
-//     auto v2 = linalg::VectorPtr<float, 3uz, -3z>{reallyLongArray + 8uz};
-//     //                          type   size stride  parent        offset
-// 
-//     // Pointer types
-//     cout << STR_EVAL(v2) << "\t<- a 'pointer-type' vector that doesn't own.\nreallyLongArray=";
-//     for (const auto &e : reallyLongArray)
-//         cout << " " << e;
-//     cout << endl;
-// 
-//     for (auto &e : v2)
-//         ++e;
-// 
-//     cout << "incremented v2's elements.\nreallyLongArray=";
-//     for (const auto &e : reallyLongArray)
-//         cout << " " << e;
-//     cout << endl;
-// 
-//     // Utilities showcase
-//     v2 -= v1;
-//     cout << "v2-=v1; " STR_EVAL(v2) << "\t" << STR_EVAL(v2*4u) << "\t" << STR_EVAL(v1 + v2) << "\t" STR_EVAL(v1.cross(v2)) << "\t" STR_EVAL(v1.direction()) << endl;
-// 
-//     cout << STR_EVAL(v1.map([](double a){ return a > 0.0; }).reduce([](bool a, bool b){ return a && b; })) << endl;
+    auto v1 = linalg::Vector{{ 1.0, 2.0, 3.0 }};
+    cout << STR_EVAL(-v1) << "\t<- a 'value-type' vector that owns its data." << endl;
+    float reallyLongArray[] = { -1.0f, -3.0f, 0.0f, 1.0f, 4.2f, 3.9f, -33.0f, 0.003f, 14.0f, 0.0f, 0.0f, 22.0f };
+    auto v2 = linalg::VectorPtr<float, 3uz, -3z>{reallyLongArray + 8uz};
+    //                          type   size stride  parent        offset
+
+    // Pointer types
+    cout << STR_EVAL(v2) << "\t<- a 'pointer-type' vector that doesn't own.\nreallyLongArray=";
+    for (const auto &e : reallyLongArray)
+        cout << " " << e;
+    cout << endl;
+
+    for (auto &e : v2)
+        ++e;
+
+    cout << "incremented v2's elements.\nreallyLongArray=";
+    for (const auto &e : reallyLongArray)
+        cout << " " << e;
+    cout << endl;
+
+    // Utilities showcase
+    v2 -= v1;
+    cout << "v2-=v1; " STR_EVAL(v2) << "\t" << STR_EVAL(v2*4u) << "\t" << STR_EVAL(v1 + v2) << "\t" STR_EVAL(v1.cross(v2)) << "\t" STR_EVAL(v1.direction()) << endl;
+
+    cout << STR_EVAL(v1.map([](double a){ return a > 0.0; }).reduce([](bool a, bool b){ return a && b; })) << endl;
 }
 
 void testMatrices() {
@@ -69,10 +69,10 @@ void testMatrices() {
 
 void testTensors() {
     // Massive 6-dimensional multilinear tensor
-#ifndef __clang__
-    constexpr
-#endif
-    auto tensor1 = linalg::Tensor{
+// #ifndef __clang__
+//     constexpr
+// #endif
+    [[maybe_unused]] auto tensor1 = linalg::Tensor{
         {{{{{{  0,  1,  2},
              {  3,  4,  5}},
                 {{  6,  7,  8},
@@ -153,12 +153,37 @@ void testTensors() {
                          {213,214,215}}}}}}
     };
 
-    cout << tensor1[1, '*', 1, '*', 1, '*'] << endl;
+    [[maybe_unused]] auto tensor2 = linalg::Tensor{
+        { { { {  0,  1,  2,  3},
+              {  4,  5,  6,  7},
+              {  8,  9, 10, 11} },
+                { { 12, 13, 14, 15},
+                  { 16, 17, 18, 19},
+                  { 20, 21, 22, 23} } },
+          { { { 24, 25, 26, 27},
+              { 28, 29, 30, 31},
+              { 32, 33, 34, 35} },
+                { { 36, 37, 38, 39},
+                  { 40, 41, 42, 43},
+                  { 44, 45, 46, 47} } } },
+    };
+
+    for (auto &elem : tensor1[0, '*', 1, 0]) {
+        cout << elem << " ";
+        ++elem;
+    }
+    cout << endl;
+
+    ++tensor1[0, 2, 1, 0, 0, 1];
+    ++tensor1[0][2, 1, 0][0, 1];
+    ++tensor1[0][2][1][0][0][1];
+    ++tensor1[0, '*', '*', 0, 0][2, 1, 1];
+    cout << tensor1['*', '*', '*', '*', '*', 1]['*', '*', '*', '*', 0]['*', '*', '*', 0]['*', '*', 1]['*', 2][0] << endl;
 
     // Test for compile-time evaluation
-#ifndef __clang__
-    //static_assert(tensor1[0][2, 1, 0][0, 1] > 0);
-#endif
+// #ifndef __clang__
+//     static_assert(tensor1[0][2, 1, 0][0, 1] > 0);
+// #endif
     // cout << LINE_EVAL(tensor1) << "\n" STR_EVAL(sizeof(tensor1)) << "\n" STR_EVAL(tensor1[0, 2, 1, 0, 0, 1]) << "\n" STR_EVAL(tensor1[0][2][1][0][0][1]) << endl;
 }
 

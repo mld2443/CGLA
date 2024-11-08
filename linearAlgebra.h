@@ -61,7 +61,7 @@ namespace linalg {
     public:
         constexpr Iterator(QualifiedType* p) : pos(p) {}
 
-        constexpr QualifiedType& operator*() { return *pos; }
+        constexpr QualifiedType& operator*() const { return *pos; }
         constexpr auto operator++() { pos += STRIDE; return *this; }
         constexpr bool operator==(const Iterator& o) const = default;
 
@@ -72,48 +72,65 @@ namespace linalg {
     template <std::size_t...> class TList {};
 
     // Reference type, transient type
-    template <class RefType, std::size_t C, std::size_t... STEPS>
+    template <class RefType, std::size_t C, std::size_t... DIMSANDSTEPS>
     struct ReferenceType {
     protected:
         static constexpr std::size_t COUNT = C;
         static constexpr bool ISREF = true;
 
-        template <class Storage, typename T, std::size_t... DIMS> requires(sizeof...(DIMS) == sizeof...(STEPS))
-        constexpr decltype(auto) get(this const TensorType<Storage, T, DIMS...>& self, std::size_t i) {
-            static constexpr std::size_t DIMSARR[sizeof...(DIMS)] = { DIMS... };
-            static constexpr std::size_t STEPARR[sizeof...(STEPS)] = { STEPS... };
-
-            return self.ref.get([]<std::size_t LASTSTEP, std::size_t INDEX>(this auto translateIndex, std::size_t i, std::size_t accum) constexpr {
-                constexpr std::size_t THISSTEP = LASTSTEP / DIMSARR[INDEX];
-                if constexpr (INDEX + 1uz < sizeof...(DIMS))
-                    return translateIndex.template operator()<THISSTEP, INDEX + 1uz>(i % THISSTEP, accum + STEPARR[INDEX] * (i / THISSTEP));
+        constexpr decltype(auto) get(this auto& self, std::size_t i) {
+            return self.ref.get([]<std::size_t LASTSTEP, std::size_t DIM, std::size_t MYSTEP, std::size_t... REMAINS>(this auto translateIndex, std::size_t i, std::size_t accum) constexpr {
+                constexpr std::size_t THISSTEP = LASTSTEP / DIM;
+                if constexpr (sizeof...(REMAINS) / 2uz)
+                    return translateIndex.template operator()<THISSTEP, REMAINS...>(i % THISSTEP, accum + MYSTEP * (i / THISSTEP));
                 else
-                    return accum + STEPARR[INDEX] * (i / THISSTEP);
-            }.template operator()<std::remove_cvref_t<decltype(self)>::COUNT, 0uz>(i, self.offset));
-        }
-        template <class Storage, typename T, std::size_t... DIMS> requires(sizeof...(DIMS) == sizeof...(STEPS))
-        constexpr decltype(auto) get(this TensorType<Storage, T, DIMS...>& self, std::size_t i) {
-            static constexpr std::size_t DIMSARR[sizeof...(DIMS)] = { DIMS... };
-            static constexpr std::size_t STEPARR[sizeof...(STEPS)] = { STEPS... };
-
-            return self.ref.get([]<std::size_t LASTSTEP, std::size_t INDEX>(this auto translateIndex, std::size_t i, std::size_t accum) constexpr {
-                constexpr std::size_t THISSTEP = LASTSTEP / DIMSARR[INDEX];
-                if constexpr (INDEX + 1uz < sizeof...(DIMS))
-                    return translateIndex.template operator()<THISSTEP, INDEX + 1uz>(i % THISSTEP, accum + STEPARR[INDEX] * (i / THISSTEP));
-                else
-                    return accum + STEPARR[INDEX] * (i / THISSTEP);
-            }.template operator()<std::remove_cvref_t<decltype(self)>::COUNT, 0uz>(i, self.offset));
+                    return accum + MYSTEP * (i / THISSTEP);
+            }.template operator()<COUNT, DIMSANDSTEPS...>(i, self.offset));
         }
 
-        template <std::size_t DIMS>
-        constexpr auto deref(this auto&& , auto , auto... ) {
-            return 0;
+        template <class Self>
+        constexpr decltype(auto) deref(this Self&& self, auto first, auto... inds) {
+            return []<std::size_t THISDIM, std::size_t THISSTEP, std::size_t... REMAINS, std::size_t... NEWDIMSANDSTEPS, std::size_t... NEWDIMS>(this auto getTensor,
+                                    Self&& self, TList<NEWDIMSANDSTEPS...>&&, TList<NEWDIMS...>&&, std::size_t offset, auto nextInd, auto... restInds) constexpr -> decltype(auto) {
+                if constexpr (std::is_same_v<decltype(nextInd), char>) { // nextInd is a wildcard
+                    if constexpr (sizeof...(restInds))             // more given indices after this wildcard
+                        return getTensor.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, restInds...);
+                    else if constexpr (sizeof...(REMAINS))        // remaining dimensions are implied wildcards
+                        return getTensor.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, '*');
+                    else                                           // final index was given or implied wildcard
+                        return TensorType<ReferenceType<RefType, (NEWDIMS * ... * THISDIM), NEWDIMSANDSTEPS..., THISDIM, 1uz>, COPYCONST(Self, std::remove_cvref_t<decltype(*self.ref.data)>), NEWDIMS..., THISDIM>(self.ref, offset);
+                } else {
+                    offset += THISSTEP * static_cast<std::size_t>(nextInd);
+                    if constexpr (sizeof...(restInds))             // more constraints to get through and/or there are unconstrained dimensions
+                        return getTensor.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS...>{}, TList<NEWDIMS...>{}, offset, restInds...);
+                    else if constexpr (sizeof...(REMAINS))        // remaining dimensions are implied wildcards
+                        return getTensor.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS...>{}, TList<NEWDIMS...>{}, offset, '*');
+                    else if constexpr (sizeof...(NEWDIMSANDSTEPS)) // all indices were given but at least one was a wildcard
+                        return TensorType<ReferenceType<RefType, (NEWDIMS * ...), NEWDIMSANDSTEPS...>, COPYCONST(Self, std::remove_cvref_t<decltype(*self.ref.data)>), NEWDIMS...>(self.ref, offset);
+                    else                                           // all indices given, no wildcards
+                        return *(self.ref.data + offset);
+                }
+            }.template operator()<DIMSANDSTEPS...>(std::forward<Self>(self), {}, {}, self.offset, first, inds...);
         }
 
     public:
         // Iterators
-        // constexpr auto begin(this auto& self) { return Iterator<COPYCONST(decltype(self), T), STRIDE>{ self.data }; }
-        // constexpr auto   end(this auto& self) { return Iterator<COPYCONST(decltype(self), T), STRIDE>{ self.data + static_cast<std::ptrdiff_t>(COUNT) * STRIDE }; } // gcc warns if '*end()' would be OOB, even when it isn't dereffed
+        template <class QualifiedType>
+        struct Iterator {
+        public:
+            constexpr Iterator(QualifiedType& ref, std::size_t offset = 0uz) : ref(ref), pos(offset) {}
+
+            constexpr decltype(auto) operator*() const { return ref.get(pos); }
+            constexpr auto operator++() { ++pos; return *this; }
+            constexpr bool operator==(const Iterator& o) const { return pos == o.pos; }
+
+        private:
+            QualifiedType& ref;
+            std::size_t pos;
+        };
+
+        constexpr auto begin(this auto& self) { return Iterator<decltype(self)>{ self }; }
+        constexpr auto   end(this auto& self) { return Iterator<decltype(self)>{ self , COUNT }; }
 
         constexpr ReferenceType(RefType& r, std::size_t o) : ref(r), offset(o) {}
 
@@ -327,39 +344,39 @@ namespace linalg {
         // Accessor, with support for slicing and currying into reference "subtensors"
         template <class Self>
         constexpr decltype(auto) operator[](this Self&& self, auto first, auto... inds) requires (sizeof...(inds) < sizeof...(DIMS)) {
-            if constexpr (std::remove_cvref_t<decltype(self)>::ISREF)
-                return self.template deref<DIMS...>(first, inds...);
+            if constexpr (std::remove_cvref_t<Self>::ISREF)
+                return self.deref(first, inds...);
             else
-                return []<std::size_t STEP, std::size_t NEXTDIM, std::size_t... RESTDIMS, std::size_t... STEPS, std::size_t... NEWDIMS>(this auto getTensor,
-                                        Self&& self, std::size_t offset, TList<STEPS...>&&, TList<NEWDIMS...>&&,
+                return []<std::size_t STEP, std::size_t THISDIM, std::size_t... RESTDIMS, std::size_t... DIMSANDSTEPS, std::size_t... NEWDIMS>(this auto getTensor,
+                                        Self&& self, TList<DIMSANDSTEPS...>&&, TList<NEWDIMS...>&&, std::size_t offset,
                                         auto nextInd, auto... restInds) constexpr -> decltype(auto) {
-                    constexpr std::size_t THISSTEP = STEP / NEXTDIM;
+                    constexpr std::size_t THISSTEP = STEP / THISDIM;
                     if constexpr (std::is_same_v<decltype(nextInd), char>) { // nextInd is a wildcard
-                        if constexpr (sizeof...(restInds))      // more indices after this wildcard
-                            return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), offset, TList<STEPS..., THISSTEP>{}, TList<NEWDIMS..., NEXTDIM>{}, restInds...);
-                        else if constexpr (sizeof...(RESTDIMS)) // generatr the rest of the bounds
-                            return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), offset, TList<STEPS..., THISSTEP>{}, TList<NEWDIMS..., NEXTDIM>{}, '*');
-                        else
-                            return TensorType<ReferenceType<Self, (NEWDIMS * ... * NEXTDIM), STEPS..., 1uz>, T, NEWDIMS..., NEXTDIM>(std::forward<Self>(self), offset);
+                        if constexpr (sizeof...(restInds))          // more given indices after this wildcard
+                            return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), TList<DIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, restInds...);
+                        else if constexpr (sizeof...(RESTDIMS))     // remaining dimensions are implied wildcards
+                            return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), TList<DIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, '*');
+                        else                                        // final index was given or implied wildcard
+                            return TensorType<ReferenceType<Self, (NEWDIMS * ... * THISDIM), DIMSANDSTEPS..., THISDIM, 1uz>, COPYCONST(Self, T), NEWDIMS..., THISDIM>(std::forward<Self>(self), offset);
                     } else {
                         offset += THISSTEP * static_cast<std::size_t>(nextInd);
-                        if constexpr (sizeof...(restInds))      // more constraints to get through and/or there are unconstrained dimensions
-                            return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), offset, TList<STEPS...>{}, TList<NEWDIMS...>{}, restInds...);
-                        else if constexpr (sizeof...(RESTDIMS)) // more constraints to get through and/or there are unconstrained dimensions
-                            return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), offset, TList<STEPS...>{}, TList<NEWDIMS...>{}, '*');
-                        else if constexpr (sizeof...(STEPS))    // there were wildcards, but all indices were explicit
-                            return TensorType<ReferenceType<Self, (NEWDIMS * ...), STEPS...>, T, NEWDIMS...>(std::forward<Self>(self), offset);
-                        else                                    // fully constrained, return value
+                        if constexpr (sizeof...(restInds))          // more constraints to get through and/or there are unconstrained dimensions
+                            return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), TList<DIMSANDSTEPS...>{}, TList<NEWDIMS...>{}, offset, restInds...);
+                        else if constexpr (sizeof...(RESTDIMS))     // remaining dimensions are implied wildcards
+                            return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), TList<DIMSANDSTEPS...>{}, TList<NEWDIMS...>{}, offset, '*');
+                        else if constexpr (sizeof...(DIMSANDSTEPS)) // all indices were given but at least one was a wildcard
+                            return TensorType<ReferenceType<Self, (NEWDIMS * ...), DIMSANDSTEPS...>, COPYCONST(Self, T), NEWDIMS...>(std::forward<Self>(self), offset);
+                        else                                        // all indices given, no wildcards
                             return *(self.data + offset);
                     }
-                }.template operator()<COUNT, DIMS...>(std::forward<Self>(self), 0z, {}, {}, first, inds...);
+                }.template operator()<COUNT, DIMS...>(std::forward<Self>(self), {}, {}, 0z, first, inds...);
         }
 
         ////////////////////////////
         // VECTOR SPECIALIZATIONS //
         ////////////////////////////
 
-        constexpr auto dot(this const isVector auto& self, const isVector auto& v) requires(std::remove_cvref_t<decltype(self)>::COUNT == std::remove_cvref_t<decltype(v)>::COUNT) {
+        constexpr auto dot(this const isVector auto& self, const isVector auto& v) requires(COUNT == std::remove_cvref_t<decltype(v)>::COUNT) {
             return []<std::size_t... IDX>(const auto& v1, const auto& v2, SEQUENCE(IDX...)) constexpr {
                 return ((v1[IDX] * v2[IDX]) + ...);
             }(self, v, MAKESEQUENCE(COUNT));
