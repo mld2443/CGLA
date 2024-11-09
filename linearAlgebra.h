@@ -52,6 +52,8 @@ namespace linalg {
     template <class StorageBase, typename T, std::size_t... DIMS>
     struct TensorType;
 
+    template <std::size_t...> class TList {};
+
     ///////////////////
     // STORAGE TYPES //
     ///////////////////
@@ -69,8 +71,6 @@ namespace linalg {
     private:
         QualifiedType* pos;
     };
-
-    template <std::size_t...> class TList {};
 
     // Reference type, transient type
     template <class RefType, std::size_t C, std::size_t... DIMSANDSTEPS>
@@ -291,19 +291,6 @@ namespace linalg {
             }
         }
 
-        template <class OtherBase, typename T2, std::size_t... IDX>
-        constexpr auto binaryMap(auto func, const TensorType<OtherBase, T2, DIMS...>& v, SEQUENCE(IDX...)) const {
-            return Tensor<decltype(func(T(), T2())), DIMS...>{ func(get(IDX), v.get(IDX))... };
-        }
-        template <std::size_t... IDX>
-        inline void mapWrite(auto func, SEQUENCE(IDX...)) {
-            (func(get(IDX)), ...);
-        }
-        template <class OtherBase, typename T2, std::size_t... IDX>
-        inline void binaryMapWrite(auto func, const TensorType<OtherBase, T2, DIMS...>& v, SEQUENCE(IDX...)) {
-            (func(get(IDX), v.get(IDX)), ...);
-        }
-
     public:
         // Constructors
         using StorageBase::StorageBase;
@@ -319,35 +306,50 @@ namespace linalg {
         static constexpr std::size_t dimensionality() { return sizeof...(DIMS); }
 
         // Functional programming options
-        constexpr auto map(auto func) const {
-            return [this]<std::size_t... IDX>(auto func, SEQUENCE(IDX...)) constexpr {
+        constexpr auto map(auto&& func) const {
+            return [this]<std::size_t... IDX>(auto& func, SEQUENCE(IDX...)) constexpr {
                 return Tensor<decltype(func(T())), DIMS...>{ func(get(IDX))... };
             }(func, MAKESEQUENCE(COUNT));
         }
-        constexpr auto reduce(auto func, auto starting) const {
+        constexpr auto binaryMap(auto&& func, const auto& t) const {
+            return [this]<class OtherBase, typename T2, std::size_t... IDX>(auto& func, const TensorType<OtherBase, T2, DIMS...>& t, SEQUENCE(IDX...)) constexpr {
+                return Tensor<decltype(func(T(), T2())), DIMS...>{ func(get(IDX), t.get(IDX))... };
+            }(func, t, MAKESEQUENCE(COUNT));
+        }
+        inline void mapWrite(auto&& func) {
+            [this]<std::size_t... IDX>(auto& func, SEQUENCE(IDX...)) constexpr {
+                (func(get(IDX)), ...);
+            }(func, MAKESEQUENCE(COUNT));
+        }
+        inline void binaryMapWrite(auto&& func, const auto& t) {
+            [this]<class OtherBase, typename T2, std::size_t... IDX>(auto& func, const TensorType<OtherBase, T2, DIMS...>& t, SEQUENCE(IDX...)) constexpr {
+                (func(get(IDX), t.get(IDX)), ...);
+            }(func, t, MAKESEQUENCE(COUNT));
+        }
+        constexpr auto reduce(auto&& func, auto starting) const {
             return [this]<std::size_t... IDX>(auto& func, auto starting, SEQUENCE(IDX...)) constexpr {
                 return ((starting = func(starting, get(IDX))), ...);
             }(func, starting, MAKESEQUENCE(COUNT));
         }
-        constexpr auto reduce(auto func) const {
+        constexpr auto reduce(auto&& func) const {
             return [this]<std::size_t... IDX>(auto& func, T starting, SEQUENCE(IDX...)) constexpr {
                 return ((starting = func(starting, get(1uz + IDX))), ...);
             }(func, get(0uz), MAKESEQUENCE(COUNT - 1uz));
         }
 
         // Member operator overloads
-        constexpr auto operator-()                        const { return map([  ](const T& e){ return    -e; }); }
+        constexpr auto operator-(                       ) const { return map([  ](const T& e){ return    -e; }); }
         constexpr auto operator*(const nonTensor auto& s) const { return map([&s](const T& e){ return e * s; }); }
         constexpr auto operator/(const nonTensor auto& s) const { return map([&s](const T& e){ return e / s; }); }
-        constexpr auto operator+(const           auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 + e2; }, t, MAKESEQUENCE(COUNT)); }
-        constexpr auto operator-(const           auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 - e2; }, t, MAKESEQUENCE(COUNT)); }
+        constexpr auto operator+(const           auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 + e2; }, t); }
+        constexpr auto operator-(const           auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 - e2; }, t); }
 
         // Mutating operators
-        inline auto& operator*=(const nonTensor auto& s) { mapWrite([&s](T& e){ e *= s; }, MAKESEQUENCE(COUNT)); return *this; }
-        inline auto& operator/=(const nonTensor auto& s) { mapWrite([&s](T& e){ e /= s; }, MAKESEQUENCE(COUNT)); return *this; }
-        inline auto& operator+=(const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 += e2; }, t, MAKESEQUENCE(COUNT)); return *this; }
-        inline auto& operator-=(const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 -= e2; }, t, MAKESEQUENCE(COUNT)); return *this; }
-        inline auto& operator= (const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 =  e2; }, t, MAKESEQUENCE(COUNT)); return *this; }
+        inline auto& operator*=(const nonTensor auto& s) { mapWrite([&s](T& e){ e *= s; }); return *this; }
+        inline auto& operator/=(const nonTensor auto& s) { mapWrite([&s](T& e){ e /= s; }); return *this; }
+        inline auto& operator+=(const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 += e2; }, t); return *this; }
+        inline auto& operator-=(const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 -= e2; }, t); return *this; }
+        inline auto& operator= (const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 =  e2; }, t); return *this; }
 
         // Accessor, with support for slicing and currying into reference "subtensors" views
         template <class Self>
@@ -380,19 +382,47 @@ namespace linalg {
                 }.template operator()<COUNT, DIMS...>(std::forward<Self>(self), {}, {}, 0z, first, inds...);
         }
 
+        template <std::size_t CONTRACTIONS, class OtherBase, typename T2, std::size_t... DIMS2>
+        constexpr auto contract(this const TensorType<StorageBase, T, DIMS...>& , const TensorType<OtherBase, T2, DIMS2...>& )
+        requires([](std::size_t (&&d1)[sizeof...(DIMS)], std::size_t (&&d2)[sizeof...(DIMS2)]){
+            if constexpr (CONTRACTIONS) {
+                for (std::size_t i = 0uz; i < CONTRACTIONS; ++i)
+                    if (d1[sizeof...(DIMS) - CONTRACTIONS + i] != d2[i])
+                        return false;
+                return true;
+            } else { // try to find compatible dimensions that can be contracted
+                for (std::size_t i, j = std::min(sizeof...(DIMS), sizeof...(DIMS2)) - (sizeof...(DIMS) == sizeof...(DIMS2)); j > 0uz; --j) {
+                    for (i = 0uz; i < j; ++i)
+                        if (d1[sizeof...(DIMS) - j + i] != d2[i])
+                            break;
+                    if (i >= j)
+                        return true;
+                }
+                return false;
+            }
+        }({ DIMS... }, { DIMS2... })) {
+            return 420;
+            // static constexpr std::size_t d1[sizeof...(DIMS1)] = { DIMS1... };
+            // static constexpr std::size_t d2[sizeof...(DIMS2)] = { DIMS2... };
+            // return []<std::size_t INDEX = 0uz>(this auto span) constexpr requires(d1[sizeof...(DIMS1) - CONTRACTIONS + INDEX] == d2[INDEX]) {
+            //     if constexpr (INDEX < CONTRACTIONS)
+            //         return span.template operator()<INDEX + 1uz>();
+            //     else
+            //         return 0;
+            // }();
+        }
+
         ////////////////////////////
         // VECTOR SPECIALIZATIONS //
         ////////////////////////////
 
         constexpr auto dot(this const isVector auto& self, const isVector auto& v) requires(COUNT == std::remove_cvref_t<decltype(v)>::COUNT) {
-            return []<std::size_t... IDX>(const auto& v1, const auto& v2, SEQUENCE(IDX...)) constexpr {
-                return ((v1[IDX] * v2[IDX]) + ...);
-            }(self, v, MAKESEQUENCE(COUNT));
+            return self.binaryMap([](const auto& a, const auto& b){ return a * b; }, v).reduce([](const auto& a, const auto& b){ return a + b; });
         }
         constexpr T magnitudeSqr(this const isVector auto& self) { return self.dot(self);                 }
         constexpr T    magnitude(this const isVector auto& self) { return std::sqrt(self.magnitudeSqr()); }
         constexpr auto direction(this const isVector auto& self) { return self / self.magnitude();        }
-        constexpr decltype(auto) transpose(this isVector auto& self) { return TensorType<ReferenceType<std::remove_reference_t<decltype(self)>, COUNT, COUNT, 1uz>, T, DIMS..., 1uz>{ self, 0uz }; }
+        constexpr auto transpose(this isVector auto& self) { return TensorType<ReferenceType<std::remove_reference_t<decltype(self)>, COUNT, COUNT, 1uz, 1uz, 1uz>, T, DIMS..., 1uz>{ self, 0uz }; }
 
         template <typename T2, class OtherBase>
         constexpr Vector<decltype(T()*T2()), 3uz> cross(this const Vector<T, 3uz, StorageBase>& self, const Vector<T2, 3uz, OtherBase>& v) {
@@ -429,8 +459,8 @@ namespace linalg {
             return TensorType<ReferenceType<Self, SMALLEST, SMALLEST, STRIDE>, COPYCONST(Self, T), SMALLEST>{ self, 0uz };
         }
 
-        template<typename T2, std::size_t M, std::size_t N, std::size_t O, class OtherStorage>
-        constexpr auto operator*(this const Matrix<T, M, N, StorageBase>& self, const Matrix<T2, N, O, OtherStorage>& m) requires isMatrix<std::remove_cvref_t<decltype(self)>> && isMatrix<std::remove_cvref_t<decltype(m)>> {
+        template<typename T2, std::size_t M, std::size_t N, std::size_t O, class OtherBase>
+        constexpr auto operator*(this const Matrix<T, M, N, StorageBase>& self, const Matrix<T2, N, O, OtherBase>& m) {
             return []<std::size_t... IDX>(const auto& m1, const auto& m2, SEQUENCE(IDX...)) constexpr {
                 return Matrix<decltype(T()*T2()), M, O>{ m1.getRow(IDX / O).dot(m2.getCol(IDX % O))... };
             }(self, m, MAKESEQUENCE(M*O));

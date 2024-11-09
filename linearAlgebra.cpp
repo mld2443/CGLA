@@ -142,19 +142,20 @@ void testTensors() {
                          {213,214,215}}}}}}
     };
 
+    //cout << STR_EVAL(sizeof(tensor1)) << "\n" LINE_EVAL(tensor1) << "\n" << endl;
+
+    cout << "Incrementing all values in slice 'tensor1[0, '*', 1, 0]'" << endl;
     for (auto &elem : tensor1[0, '*', 1, 0]) {
         cout << elem << " ";
         ++elem;
     }
     cout << endl;
 
-    ++tensor1[0, 2, 1, 0, 0, 1];
-    ++tensor1[0][2, 1, 0][0, 1];
-    ++tensor1[0][2][1][0][0][1];
-    ++tensor1[0, '*', '*', 0, 0][2, 1, 1];
-    cout << tensor1['*', '*', '*', '*', '*', 1]['*', '*', '*', '*', 0]['*', '*', '*', 0]['*', '*', 1]['*', 2][0] << endl;
-
-    cout << LINE_EVAL(tensor1) << "\n" STR_EVAL(sizeof(tensor1)) << "\n" STR_EVAL(tensor1[0, 2, 1, 0, 0, 1]) << "\n" STR_EVAL(tensor1[0][2][1][0][0][1]) << endl;
+    cout << STR_EVAL(++tensor1[0, 2, 1, 0, 0, 1]) << endl;
+    cout << STR_EVAL(++tensor1[0][2, 1, 0][0, 1]) << endl;
+    cout << STR_EVAL(++tensor1[0][2][1][0][0][1]) << endl;
+    cout << STR_EVAL(++tensor1[0, '*', '*', 0, 0][2, 1, 1]) << endl;
+    cout << STR_EVAL(tensor1['*', '*', '*', '*', '*', 1]['*', '*', '*', '*', 0]['*', '*', '*', 0]['*', '*', 1]['*', 2][0]) << endl;
 
     constexpr auto tensor2 = linalg::Tensor<double, 2uz, 2uz, 3uz, 4uz>{
          0,  1,  2,  3,
@@ -171,6 +172,10 @@ void testTensors() {
             44, 45, 46, 47
     };
 
+    //constexpr auto tensor3 = linalg::Tensor<int, 2uz, 3uz, 4uz, 5uz>::broadcast(3);
+
+    //cout << tensor2.contract<0uz>(tensor3) << endl;
+
     // Test for compile-time evaluation
     static_assert(tensor2['*', 1][0, '*', 2][2] > 0);
 }
@@ -180,8 +185,8 @@ void testTensors() {
 //////////
 int main() {
     // testVectors();
-    testMatrices();
-    // testTensors();
+    // testMatrices();
+    testTensors();
 
     return 0;
 }

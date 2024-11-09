@@ -33,5 +33,5 @@ Linear Algebra in C++ is often messy, verbose, cluttered, and/or opaque. Inspire
 - [x] Reimpl getRow(x), getCol(x), getDiag(x)
 - [ ] Tensor contraction(4)
 - [ ] Matrix transpose(3)
-- [ ] Vector transpose -> Matrix(1)
-- [ ] Matrix ops: matrix mult (x), eigenvector/value(3), determinant(3), invert(1), identity(1), rank(3), ...
+- [ ] Vector transpose -> Matrix(2)
+- [ ] Matrix ops: matrix mult (x), identity(x), eigenvector/value(3), determinant(3), invert(1), rank(3), ...
