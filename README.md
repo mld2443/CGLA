@@ -31,7 +31,7 @@ Linear Algebra in C++ is often messy, verbose, cluttered, and/or opaque. Inspire
 - [x] Merge recursive ValueType into Tensor(x) and ensure base functionality(x)
 - [x] Slicing using the operator[] with a wildcard(x)
 - [x] Reimpl getRow(x), getCol(x), getDiag(x)
-- [ ] Change name? Unsure if specifying multilinear tensor is still technically correct
+- [ ] Tensor contraction(4)
 - [ ] Matrix transpose(3)
 - [ ] Vector transpose -> Matrix(1)
-- [ ] Matrix ops: matrix mult (2), eigenvector/value(3), determinant(3), invert(1), identity(1), rank(3), ...
+- [ ] Matrix ops: matrix mult (x), eigenvector/value(3), determinant(3), invert(1), identity(1), rank(3), ...

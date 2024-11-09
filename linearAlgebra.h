@@ -231,6 +231,7 @@ namespace linalg {
     // Concepts for dimension-dependant specializations
     template <class T> concept isVector = requires { T::dimensionality(); } && T::dimensionality() == 1uz;
     template <class T> concept isMatrix = requires { T::dimensionality(); } && T::dimensionality() == 2uz;
+    template <class T> concept nonTensor = !requires { T::dimensionality(); } || T::dimensionality() == 0uz;
 
     // Deduction guides for value-initialization
     // Anything higher than 10-dimensional can still be value-initialized, but template params must be explicit
@@ -335,20 +336,20 @@ namespace linalg {
         }
 
         // Member operator overloads
-        constexpr auto operator-()              const { return map([  ](const T& e){ return    -e; }); }
-        constexpr auto operator*(const auto& s) const { return map([&s](const T& e){ return e * s; }); }
-        constexpr auto operator/(const auto& s) const { return map([&s](const T& e){ return e / s; }); }
-        constexpr auto operator+(const auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 + e2; }, t, MAKESEQUENCE(COUNT)); }
-        constexpr auto operator-(const auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 - e2; }, t, MAKESEQUENCE(COUNT)); }
+        constexpr auto operator-()                        const { return map([  ](const T& e){ return    -e; }); }
+        constexpr auto operator*(const nonTensor auto& s) const { return map([&s](const T& e){ return e * s; }); }
+        constexpr auto operator/(const nonTensor auto& s) const { return map([&s](const T& e){ return e / s; }); }
+        constexpr auto operator+(const           auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 + e2; }, t, MAKESEQUENCE(COUNT)); }
+        constexpr auto operator-(const           auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 - e2; }, t, MAKESEQUENCE(COUNT)); }
 
         // Mutating operators
-        inline auto& operator*=(const auto& s) { mapWrite([&s](T& e){ e *= s; }, MAKESEQUENCE(COUNT)); return *this; }
-        inline auto& operator/=(const auto& s) { mapWrite([&s](T& e){ e /= s; }, MAKESEQUENCE(COUNT)); return *this; }
-        inline auto& operator+=(const auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 += e2; }, t, MAKESEQUENCE(COUNT)); return *this; }
-        inline auto& operator-=(const auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 -= e2; }, t, MAKESEQUENCE(COUNT)); return *this; }
-        inline auto& operator= (const auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 =  e2; }, t, MAKESEQUENCE(COUNT)); return *this; }
+        inline auto& operator*=(const nonTensor auto& s) { mapWrite([&s](T& e){ e *= s; }, MAKESEQUENCE(COUNT)); return *this; }
+        inline auto& operator/=(const nonTensor auto& s) { mapWrite([&s](T& e){ e /= s; }, MAKESEQUENCE(COUNT)); return *this; }
+        inline auto& operator+=(const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 += e2; }, t, MAKESEQUENCE(COUNT)); return *this; }
+        inline auto& operator-=(const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 -= e2; }, t, MAKESEQUENCE(COUNT)); return *this; }
+        inline auto& operator= (const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 =  e2; }, t, MAKESEQUENCE(COUNT)); return *this; }
 
-        // Accessor, with support for slicing and currying into reference "subtensors"
+        // Accessor, with support for slicing and currying into reference "subtensors" views
         template <class Self>
         constexpr decltype(auto) operator[](this Self&& self, auto first, auto... inds) requires (sizeof...(inds) < sizeof...(DIMS)) {
             if constexpr (std::remove_cvref_t<Self>::ISREF)
@@ -391,6 +392,7 @@ namespace linalg {
         constexpr T magnitudeSqr(this const isVector auto& self) { return self.dot(self);                 }
         constexpr T    magnitude(this const isVector auto& self) { return std::sqrt(self.magnitudeSqr()); }
         constexpr auto direction(this const isVector auto& self) { return self / self.magnitude();        }
+        constexpr decltype(auto) transpose(this isVector auto& self) { return TensorType<ReferenceType<std::remove_reference_t<decltype(self)>, COUNT, COUNT, 1uz>, T, DIMS..., 1uz>{ self, 0uz }; }
 
         template <typename T2, class OtherBase>
         constexpr Vector<decltype(T()*T2()), 3uz> cross(this const Vector<T, 3uz, StorageBase>& self, const Vector<T2, 3uz, OtherBase>& v) {
@@ -436,9 +438,9 @@ namespace linalg {
     };
 
     // Right-side operator overloads
-    template <typename T, class StorageBase, typename T2, std::size_t... DIMS>
+    template <nonTensor T, class StorageBase, typename T2, std::size_t... DIMS>
     constexpr auto operator*(const T& s, const TensorType<StorageBase, T2, DIMS...> &t) { return t.map([&s](const T& e) { return e * s; }); }
-    template <typename T, class StorageBase, typename T2, std::size_t... DIMS>
+    template <nonTensor T, class StorageBase, typename T2, std::size_t... DIMS>
     constexpr auto operator/(const T& s, const TensorType<StorageBase, T2, DIMS...> &t) { return t.map([&s](const T& e) { return e / s; }); }
     template <class StorageBase, typename T, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
     constexpr std::ostream& operator<<(std::ostream& os, const TensorType<StorageBase, T, FIRSTDIM, RESTDIMS...>& t) {
