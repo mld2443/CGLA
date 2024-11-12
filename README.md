@@ -13,25 +13,16 @@ Linear Algebra in C++ is often messy, verbose, cluttered, and/or opaque. Inspire
 
 ### Things it does not do
 
-1. Replace BLAS - use BLAS if speed is paramount
+1. Replace BLAS - use BLAS if speed is paramount, or the aforementioned C++ \<linalg\> header once available
 1. Utilize vector registers or specialty SIMD instructions
 1. Sparse data representation, modeling, or optimizations
+1. Capture every elementary operation for a vector/matrix/tensor, yet
+1. Get the names for everything right, probably
 
-## Tasks
+## Todo
 
-- [x] SETTLE ON PARADIGM: It's multilinear tensors all the way down and recursive inheritance
-- [x] Generic tensor accessor
-- [x] Display arbitrary tensors
-- [x] Shared ops: map(x), fold(x), scalar mult/div(x), negate(x), add(x), subtract(x), maybe inline mult/div(1)
-- [x] Vector ops: dot (x), cross (x)
-- [x] Rewrite Matrix and Vector as type aliases; clang 18 doesn't support template deductions for aliases
-- [x] Merge StorageBase features into Tensor and consider removing it(x)
-- [x] Default initialization(x)
-- [x] Rework "internal" functions into lambdas(x)
-- [x] Merge recursive ValueType into Tensor(x) and ensure base functionality(x)
-- [x] Slicing using the operator[] with a wildcard(x)
-- [x] Reimpl getRow(x), getCol(x), getDiag(x)
-- [ ] Tensor contraction(4)
-- [ ] Matrix transpose(3)
-- [ ] Vector transpose -> Matrix(2)
-- [ ] Matrix ops: matrix mult (x), identity(x), eigenvector/value(3), determinant(3), invert(1), rank(3), ...
+- Pure, python-style slicing per dimension(4)
+- Tensor contraction(4)
+- Matrix transpose(3)
+- Covector -> Matrix(1)
+- Matrix ops: eigenvector/value(3), determinant(3), invert(1), rank(3), ...

@@ -42,17 +42,20 @@
 #include <utility>     // forward, index_sequence, make_index_sequence
 #include <algorithm>   // min
 
+// Helper macros to reduce clutter, undefined at end of file
+#define COPYCONST(T1, ...) std::conditional_t<std::is_const_v<std::remove_reference_t<T1>>, const __VA_ARGS__, __VA_ARGS__>
+#define MAKESEQUENCE(SIZE) std::make_index_sequence<SIZE>{}
+#define SEQUENCE(NAME) std::index_sequence<NAME>&&
+
+
 namespace linalg {
-    // Helper macros to reduce clutter, undefined at end of namespace
-    #define COPYCONST(T1, ...) std::conditional_t<std::is_const_v<std::remove_reference_t<T1>>, const __VA_ARGS__, __VA_ARGS__>
-    #define MAKESEQUENCE(SIZE) std::make_index_sequence<SIZE>{}
-    #define SEQUENCE(NAME) std::index_sequence<NAME>&&
-
-
     template <class StorageBase, typename T, std::size_t... DIMS>
     struct TensorType;
 
     template <std::size_t...> class TList {};
+
+    template <std::size_t START, std::size_t STOP, std::ptrdiff_t STRIDE = 1z>
+    struct Slice {};
 
     ///////////////////
     // STORAGE TYPES //
@@ -77,8 +80,10 @@ namespace linalg {
 
         template <class Self>
         constexpr decltype(auto) deref(this Self&& self, auto first, auto... inds) {
-            return []<std::size_t THISDIM, std::size_t THISSTEP, std::size_t... REMAINS, std::size_t... NEWDIMSANDSTEPS, std::size_t... NEWDIMS>(this auto getTensor,
-                                    Self&& self, TList<NEWDIMSANDSTEPS...>&&, TList<NEWDIMS...>&&, std::size_t offset, auto nextInd, auto... restInds) constexpr -> decltype(auto) {
+            return []<std::size_t THISDIM, std::size_t THISSTEP, std::size_t... REMAINS, std::size_t... NEWDIMSANDSTEPS, std::size_t... NEWDIMS>(
+                        this auto getTensor, Self&& self,
+                        TList<NEWDIMSANDSTEPS...>&&, TList<NEWDIMS...>&&,
+                        std::size_t offset, auto nextInd, auto... restInds) constexpr -> decltype(auto) {
                 if constexpr (std::is_same_v<decltype(nextInd), char>) { // nextInd is a wildcard
                     if constexpr (sizeof...(restInds))             // more given indices after this wildcard
                         return getTensor.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, restInds...);
@@ -227,7 +232,7 @@ namespace linalg {
         using StorageType::COUNT;
         using StorageType::get;   // Accessor addressing flat array of data, used internally to perform map
 
-        // Special 'template containers' prettyPrint() uses to build compile-time whitespace
+        // Special 'template container' prettyPrint() uses to build compile-time whitespace
         template <char... Cs> struct TString { static constexpr char STR[] = {Cs..., '\0'}; };
 
         // Helper for operator<<, displays arbitrary dimensional tensors in a human-readable format
@@ -248,19 +253,6 @@ namespace linalg {
                 ((os << (IDX ? ", " : "") << get(offset + IDX)), ...) << ((offset + THISDIM < COUNT) ? "," : "");
             }
         }
-
-        // Helper function for tensor contraction and matrix multiplication
-        // template <std::size_t... DIMS1, std::size_t... DIMS2> requires(sizeof...(DIMS1) > 0uz && sizeof...(DIMS2) > 0uz)
-        // static constexpr std::size_t findLargestOverlap(std::size_t (&&d1)[sizeof...(DIMS1)], std::size_t (&&d2)[sizeof...(DIMS2)]) {
-        //     for (std::size_t i, extent = std::min(sizeof...(DIMS), sizeof...(DIMS2)) - (sizeof...(DIMS) == sizeof...(DIMS2)); extent > 0uz; --extent) {
-        //         for (i = 0uz; i < extent; ++i)
-        //             if (d1[sizeof...(DIMS) - extent + i] != d2[i])
-        //                 break;
-        //         if (i >= extent)
-        //             return extent;
-        //     }
-        //     return 0uz;
-        // }
 
     public:
         // Constructors
@@ -288,7 +280,7 @@ namespace linalg {
         static constexpr std::size_t count()          { return COUNT; }
         static constexpr std::size_t dimensionality() { return sizeof...(DIMS); }
 
-        // Functional programming options
+        // Functional programming
         constexpr auto map(auto&& func) const {
             return [this]<std::size_t... IDX>(auto& func, SEQUENCE(IDX...)) constexpr {
                 return Tensor<decltype(func(T())), DIMS...>{ func(get(IDX))... };
@@ -334,7 +326,20 @@ namespace linalg {
         inline auto& operator-=(const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 -= e2; }, t); return *this; }
         inline auto& operator= (const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 =  e2; }, t); return *this; }
 
-        template <std::size_t CONTRACTIONS, class OtherType, typename T2, std::size_t... DIMS2>
+        // Helper function for tensor contraction and matrix multiplication
+        // template <std::size_t... DIMS1, std::size_t... DIMS2> requires(sizeof...(DIMS1) > 0uz && sizeof...(DIMS2) > 0uz)
+        // static constexpr std::size_t findLargestOverlap(std::size_t (&&d1)[sizeof...(DIMS1)], std::size_t (&&d2)[sizeof...(DIMS2)]) {
+        //     for (std::size_t i, extent = std::min(sizeof...(DIMS), sizeof...(DIMS2)) - (sizeof...(DIMS) == sizeof...(DIMS2)); extent > 0uz; --extent) {
+        //         for (i = 0uz; i < extent; ++i)
+        //             if (d1[sizeof...(DIMS) - extent + i] != d2[i])
+        //                 break;
+        //         if (i >= extent)
+        //             return extent;
+        //     }
+        //     return 0uz;
+        // }
+
+        template <std::size_t CONTRACTIONS, class OtherType, typename T2, std::size_t... DIMS2> requires(CONTRACTIONS > 0uz)
         constexpr auto contract(this const TensorType<StorageType, T, DIMS...>& , const TensorType<OtherType, T2, DIMS2...>& )
         requires([](std::size_t (&&d1)[sizeof...(DIMS)], std::size_t (&&d2)[sizeof...(DIMS2)]){
             for (std::size_t i = 0uz; i < CONTRACTIONS; ++i)
@@ -342,16 +347,7 @@ namespace linalg {
                     return false;
             return true;
         }({ DIMS... }, { DIMS2... })) {
-            return 420;
-
-            // static constexpr std::size_t d1[sizeof...(DIMS1)] = { DIMS1... };
-            // static constexpr std::size_t d2[sizeof...(DIMS2)] = { DIMS2... };
-            // return []<std::size_t INDEX = 0uz>(this auto span) constexpr requires(d1[sizeof...(DIMS1) - CONTRACTIONS + INDEX] == d2[INDEX]) {
-            //     if constexpr (INDEX < CONTRACTIONS)
-            //         return span.template operator()<INDEX + 1uz>();
-            //     else
-            //         return 0;
-            // }();
+            return 0; //FIXME
         }
 
         // template<class OtherType, typename T2, std::size_t... DIMS2>
@@ -368,9 +364,10 @@ namespace linalg {
             if constexpr (std::remove_cvref_t<Self>::ISREF)
                 return self.deref(first, inds...);
             else
-                return []<std::size_t STEP, std::size_t THISDIM, std::size_t... RESTDIMS, std::size_t... DIMSANDSTEPS, std::size_t... NEWDIMS>(this auto getTensor,
-                                        Self&& self, TList<DIMSANDSTEPS...>&&, TList<NEWDIMS...>&&, std::size_t offset,
-                                        auto nextInd, auto... restInds) constexpr -> decltype(auto) {
+                return []<std::size_t STEP, std::size_t THISDIM, std::size_t... RESTDIMS, std::size_t... DIMSANDSTEPS, std::size_t... NEWDIMS>(
+                            this auto getTensor, Self&& self,
+                            TList<DIMSANDSTEPS...>&&, TList<NEWDIMS...>&&,
+                            std::size_t offset, auto nextInd, auto... restInds) constexpr -> decltype(auto) {
                     constexpr std::size_t THISSTEP = STEP / THISDIM;
                     if constexpr (std::is_same_v<decltype(nextInd), char>) { // nextInd is a wildcard
                         if constexpr (sizeof...(restInds))          // more given indices after this wildcard
@@ -442,7 +439,7 @@ namespace linalg {
 
         template <std::size_t N> requires(N > 1uz)
         constexpr T determinant(this const Matrix<T, N, N, StorageType>&) {
-            return T();
+            return T(); //FIXME
         }
 
         template<typename T2, std::size_t M, std::size_t N, std::size_t O, class OtherType>
@@ -454,17 +451,17 @@ namespace linalg {
     };
 
     // Right-side operator overloads
-    template <nonTensor T, class StorageType, typename T2, std::size_t... DIMS>
-    constexpr auto operator*(const T& s, const TensorType<StorageType, T2, DIMS...> &t) { return t.map([&s](const T& e) { return e * s; }); }
-    template <nonTensor T, class StorageType, typename T2, std::size_t... DIMS>
-    constexpr auto operator/(const T& s, const TensorType<StorageType, T2, DIMS...> &t) { return t.map([&s](const T& e) { return e / s; }); }
+    template <class StorageType, typename T, std::size_t... DIMS>
+    constexpr auto operator*(const nonTensor auto& s, const TensorType<StorageType, T, DIMS...> &t) { return t.map([&s](const T& e) { return e * s; }); }
+    template <class StorageType, typename T, std::size_t... DIMS>
+    constexpr auto operator/(const nonTensor auto& s, const TensorType<StorageType, T, DIMS...> &t) { return t.map([&s](const T& e) { return e / s; }); }
     template <class StorageType, typename T, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
     constexpr std::ostream& operator<<(std::ostream& os, const TensorType<StorageType, T, FIRSTDIM, RESTDIMS...>& t) {
         t.template prettyPrint<(RESTDIMS * ... * 1uz), FIRSTDIM, RESTDIMS...>(os, MAKESEQUENCE(FIRSTDIM));
         return os;
     }
-
-    #undef COPYCONSTFORTYPE
-    #undef MAKESEQUENCE
-    #undef SEQUENCE
 }
+
+#undef COPYCONSTFORTYPE
+#undef MAKESEQUENCE
+#undef SEQUENCE
