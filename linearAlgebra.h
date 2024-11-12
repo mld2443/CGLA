@@ -58,20 +58,6 @@ namespace linalg {
     // STORAGE TYPES //
     ///////////////////
 
-    // Shared iterator type for for-each loops
-    template <typename QualifiedType, std::ptrdiff_t STRIDE = 1z>
-    struct Iterator {
-    public:
-        constexpr Iterator(QualifiedType* p) : pos(p) {}
-
-        constexpr QualifiedType& operator*() const { return *pos; }
-        constexpr auto operator++() { pos += STRIDE; return *this; }
-        constexpr bool operator==(const Iterator& o) const = default;
-
-    private:
-        QualifiedType* pos;
-    };
-
     // Reference type, transient type
     template <class RefType, std::size_t C, std::size_t... DIMSANDSTEPS>
     struct ReferenceType {
@@ -115,24 +101,6 @@ namespace linalg {
         }
 
     public:
-        // Iterators
-        template <class QualifiedType>
-        struct Iterator {
-        public:
-            constexpr Iterator(QualifiedType& ref, std::size_t offset = 0uz) : ref(ref), pos(offset) {}
-
-            constexpr decltype(auto) operator*() const { return ref.get(pos); }
-            constexpr auto operator++() { ++pos; return *this; }
-            constexpr bool operator==(const Iterator& o) const { return pos == o.pos; }
-
-        private:
-            QualifiedType& ref;
-            std::size_t pos;
-        };
-
-        constexpr auto begin(this auto& self) { return Iterator<decltype(self)>{ self }; }
-        constexpr auto   end(this auto& self) { return Iterator<decltype(self)>{ self , COUNT }; }
-
         constexpr ReferenceType(RefType& r, std::size_t o) : ref(r), offset(o) {}
 
     protected:
@@ -150,10 +118,6 @@ namespace linalg {
         constexpr decltype(auto) get(this auto&& self, std::size_t i) { return *(self.data + static_cast<std::ptrdiff_t>(i) * STRIDE); }
 
     public:
-        // Iterators
-        constexpr auto begin(this auto& self) { return Iterator<COPYCONST(decltype(self), T), STRIDE>{ self.data }; }
-        constexpr auto   end(this auto& self) { return Iterator<COPYCONST(decltype(self), T), STRIDE>{ self.data + static_cast<std::ptrdiff_t>(COUNT) * STRIDE }; } // gcc warns if '*end()' would be OOB, even when it isn't dereffed
-
         constexpr PointerType(T* origin) : data(origin) {}
 
     protected:
@@ -181,7 +145,7 @@ namespace linalg {
 
     private:
         template <std::size_t... IDX>
-        constexpr RecursiveValueType(SEQUENCE(IDX...), NestedArray* first) : data{ first[IDX]... } {} // clang reports past-the-end deref illegal for constexpr
+        constexpr RecursiveValueType(SEQUENCE(IDX...), NestedArray* first) : data{ first[IDX]... } {}
 
     protected:
         constexpr RecursiveValueType(NestedArray&& first) : RecursiveValueType<T, COUNT>(MAKESEQUENCE(COUNT), &first) {}
@@ -205,11 +169,6 @@ namespace linalg {
         using Base::data;
 
         constexpr decltype(auto) get(this auto&& self, std::size_t i) { return *(self.data + i); }
-
-    public:
-        // Iterators
-        constexpr auto begin(this auto& self) { return Iterator<COPYCONST(decltype(self), T)>{ self.data }; }
-        constexpr auto   end(this auto& self) { return Iterator<COPYCONST(decltype(self), T)>{ self.data + COUNT }; }
     };
 
     ////////////
@@ -256,18 +215,17 @@ namespace linalg {
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3, std::size_t D4, std::size_t D5, std::size_t D6, std::size_t D7, std::size_t D8, std::size_t D9>
     TensorType(T (&&)[D0][D1][D2][D3][D4][D5][D6][D7][D8][D9]) -> TensorType<ValueType<T, D0, D1, D2, D3, D4, D5, D6, D7, D8, D9>, T, D0, D1, D2, D3, D4, D5, D6, D7, D8, D9>;
 
-    template <class StorageBase, typename T, std::size_t... DIMS>
-    struct TensorType final : StorageBase {
+    template <class StorageType, typename T, std::size_t... DIMS>
+    struct TensorType final : StorageType {
     private:
         template <class, std::size_t, std::size_t...>
         friend struct ReferenceType;
         template <class, typename, std::size_t...>
         friend struct TensorType; // Allows different instantiations to use protected get()
-        friend StorageBase;       // Needed for StorageBase to be able to access its own methods while using explicit this
-        template <class OtherBase, typename T2, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
-        friend constexpr std::ostream& operator<<(std::ostream& os, const TensorType<OtherBase, T2, FIRSTDIM, RESTDIMS...>& t);
-        using StorageBase::COUNT;
-        using StorageBase::get;   // Accessor addressing flat array of data, used internally to perform map
+        template <class OtherType, typename T2, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
+        friend constexpr std::ostream& operator<<(std::ostream& os, const TensorType<OtherType, T2, FIRSTDIM, RESTDIMS...>& t);
+        using StorageType::COUNT;
+        using StorageType::get;   // Accessor addressing flat array of data, used internally to perform map
 
         // Special 'template containers' prettyPrint() uses to build compile-time whitespace
         template <char... Cs> struct TString { static constexpr char STR[] = {Cs..., '\0'}; };
@@ -291,15 +249,40 @@ namespace linalg {
             }
         }
 
+        // Helper function for tensor contraction and matrix multiplication
+        // template <std::size_t... DIMS1, std::size_t... DIMS2> requires(sizeof...(DIMS1) > 0uz && sizeof...(DIMS2) > 0uz)
+        // static constexpr std::size_t findLargestOverlap(std::size_t (&&d1)[sizeof...(DIMS1)], std::size_t (&&d2)[sizeof...(DIMS2)]) {
+        //     for (std::size_t i, extent = std::min(sizeof...(DIMS), sizeof...(DIMS2)) - (sizeof...(DIMS) == sizeof...(DIMS2)); extent > 0uz; --extent) {
+        //         for (i = 0uz; i < extent; ++i)
+        //             if (d1[sizeof...(DIMS) - extent + i] != d2[i])
+        //                 break;
+        //         if (i >= extent)
+        //             return extent;
+        //     }
+        //     return 0uz;
+        // }
+
     public:
         // Constructors
-        using StorageBase::StorageBase;
+        using StorageType::StorageType;
+        static constexpr auto broadcast(T&& s) { return [&]<std::size_t... IDX>(SEQUENCE(IDX...)) constexpr { return TensorType<StorageType, T, DIMS...>{ s + T(IDX & 0uz)... }; }(MAKESEQUENCE(COUNT)); }
 
-        static constexpr auto broadcast(T&& value) {
-            return [&]<std::size_t... IDX>(SEQUENCE(IDX...)) constexpr {
-                return TensorType<StorageBase, T, DIMS...>{ value + T(IDX & 0uz)... };
-            }(MAKESEQUENCE(COUNT));
-        }
+        // Iterator for for-each loops
+        template <class QualifiedType>
+        struct Iterator {
+        public:
+            constexpr Iterator(QualifiedType& ref, std::size_t offset = 0uz) : ref(ref), pos(offset) {}
+
+            constexpr decltype(auto) operator*() const { return ref.get(pos); }
+            constexpr auto operator++() { ++pos; return *this; }
+            constexpr bool operator==(const Iterator& o) const { return pos == o.pos; }
+
+        private:
+            QualifiedType& ref;
+            std::size_t pos;
+        };
+        constexpr auto begin(this auto& self) { return Iterator<decltype(self)>{ self }; }
+        constexpr auto   end(this auto& self) { return Iterator<decltype(self)>{ self , COUNT }; }
 
         // Metadata
         static constexpr std::size_t count()          { return COUNT; }
@@ -312,7 +295,7 @@ namespace linalg {
             }(func, MAKESEQUENCE(COUNT));
         }
         constexpr auto binaryMap(auto&& func, const auto& t) const {
-            return [this]<class OtherBase, typename T2, std::size_t... IDX>(auto& func, const TensorType<OtherBase, T2, DIMS...>& t, SEQUENCE(IDX...)) constexpr {
+            return [this]<class OtherType, typename T2, std::size_t... IDX>(auto& func, const TensorType<OtherType, T2, DIMS...>& t, SEQUENCE(IDX...)) constexpr {
                 return Tensor<decltype(func(T(), T2())), DIMS...>{ func(get(IDX), t.get(IDX))... };
             }(func, t, MAKESEQUENCE(COUNT));
         }
@@ -322,7 +305,7 @@ namespace linalg {
             }(func, MAKESEQUENCE(COUNT));
         }
         inline void binaryMapWrite(auto&& func, const auto& t) {
-            [this]<class OtherBase, typename T2, std::size_t... IDX>(auto& func, const TensorType<OtherBase, T2, DIMS...>& t, SEQUENCE(IDX...)) constexpr {
+            [this]<class OtherType, typename T2, std::size_t... IDX>(auto& func, const TensorType<OtherType, T2, DIMS...>& t, SEQUENCE(IDX...)) constexpr {
                 (func(get(IDX), t.get(IDX)), ...);
             }(func, t, MAKESEQUENCE(COUNT));
         }
@@ -351,7 +334,35 @@ namespace linalg {
         inline auto& operator-=(const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 -= e2; }, t); return *this; }
         inline auto& operator= (const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 =  e2; }, t); return *this; }
 
-        // Accessor, with support for slicing and currying into reference "subtensors" views
+        template <std::size_t CONTRACTIONS, class OtherType, typename T2, std::size_t... DIMS2>
+        constexpr auto contract(this const TensorType<StorageType, T, DIMS...>& , const TensorType<OtherType, T2, DIMS2...>& )
+        requires([](std::size_t (&&d1)[sizeof...(DIMS)], std::size_t (&&d2)[sizeof...(DIMS2)]){
+            for (std::size_t i = 0uz; i < CONTRACTIONS; ++i)
+                if (d1[sizeof...(DIMS) - CONTRACTIONS + i] != d2[i])
+                    return false;
+            return true;
+        }({ DIMS... }, { DIMS2... })) {
+            return 420;
+
+            // static constexpr std::size_t d1[sizeof...(DIMS1)] = { DIMS1... };
+            // static constexpr std::size_t d2[sizeof...(DIMS2)] = { DIMS2... };
+            // return []<std::size_t INDEX = 0uz>(this auto span) constexpr requires(d1[sizeof...(DIMS1) - CONTRACTIONS + INDEX] == d2[INDEX]) {
+            //     if constexpr (INDEX < CONTRACTIONS)
+            //         return span.template operator()<INDEX + 1uz>();
+            //     else
+            //         return 0;
+            // }();
+        }
+
+        // template<class OtherType, typename T2, std::size_t... DIMS2>
+        // constexpr auto operator*(this const TensorType<StorageType, T, DIMS...>& self, const TensorType<OtherType, T2, DIMS2...>& t) requires(TensorType<StorageType, T, DIMS...>::findLargestOverlap({ DIMS... }, { DIMS2... }) > 0uz) {
+        //     return self.contract<findLargestOverlap({ DIMS... }, { DIMS2... })>(t);
+        // }
+
+        ///////////////
+        // ACCESSORS //
+        ///////////////
+
         template <class Self>
         constexpr decltype(auto) operator[](this Self&& self, auto first, auto... inds) requires (sizeof...(inds) < sizeof...(DIMS)) {
             if constexpr (std::remove_cvref_t<Self>::ISREF)
@@ -382,34 +393,18 @@ namespace linalg {
                 }.template operator()<COUNT, DIMS...>(std::forward<Self>(self), {}, {}, 0z, first, inds...);
         }
 
-        template <std::size_t CONTRACTIONS, class OtherBase, typename T2, std::size_t... DIMS2>
-        constexpr auto contract(this const TensorType<StorageBase, T, DIMS...>& , const TensorType<OtherBase, T2, DIMS2...>& )
-        requires([](std::size_t (&&d1)[sizeof...(DIMS)], std::size_t (&&d2)[sizeof...(DIMS2)]){
-            if constexpr (CONTRACTIONS) {
-                for (std::size_t i = 0uz; i < CONTRACTIONS; ++i)
-                    if (d1[sizeof...(DIMS) - CONTRACTIONS + i] != d2[i])
-                        return false;
-                return true;
-            } else { // try to find compatible dimensions that can be contracted
-                for (std::size_t i, j = std::min(sizeof...(DIMS), sizeof...(DIMS2)) - (sizeof...(DIMS) == sizeof...(DIMS2)); j > 0uz; --j) {
-                    for (i = 0uz; i < j; ++i)
-                        if (d1[sizeof...(DIMS) - j + i] != d2[i])
-                            break;
-                    if (i >= j)
-                        return true;
-                }
-                return false;
-            }
-        }({ DIMS... }, { DIMS2... })) {
-            return 420;
-            // static constexpr std::size_t d1[sizeof...(DIMS1)] = { DIMS1... };
-            // static constexpr std::size_t d2[sizeof...(DIMS2)] = { DIMS2... };
-            // return []<std::size_t INDEX = 0uz>(this auto span) constexpr requires(d1[sizeof...(DIMS1) - CONTRACTIONS + INDEX] == d2[INDEX]) {
-            //     if constexpr (INDEX < CONTRACTIONS)
-            //         return span.template operator()<INDEX + 1uz>();
-            //     else
-            //         return 0;
-            // }();
+        template <class Self>
+        constexpr decltype(auto) getDiagonal(this Self& self) requires(std::remove_cvref_t<Self>::dimensionality() > 1uz) {
+            constexpr std::size_t SMALLEST = []<std::size_t D0, std::size_t D1, std::size_t... REST>(this auto minimum) constexpr {
+                if constexpr (sizeof...(REST)) return minimum.template operator()<std::min(D0, D1), REST...>();
+                else                           return std::min(D0, D1);
+            }.template operator()<DIMS...>();
+            constexpr std::size_t STRIDE = []<std::size_t PRODUCT, std::size_t, std::size_t... REST>(this auto calcStride) constexpr {
+                if constexpr (sizeof...(REST)) return calcStride.template operator()<PRODUCT + (REST * ...), REST...>();
+                else                           return PRODUCT;
+            }.template operator()<1uz, DIMS...>();
+
+            return TensorType<ReferenceType<Self, SMALLEST, SMALLEST, STRIDE>, COPYCONST(Self, T), SMALLEST>{ self, 0uz };
         }
 
         ////////////////////////////
@@ -422,10 +417,10 @@ namespace linalg {
         constexpr T magnitudeSqr(this const isVector auto& self) { return self.dot(self);                 }
         constexpr T    magnitude(this const isVector auto& self) { return std::sqrt(self.magnitudeSqr()); }
         constexpr auto direction(this const isVector auto& self) { return self / self.magnitude();        }
-        constexpr auto transpose(this isVector auto& self) { return TensorType<ReferenceType<std::remove_reference_t<decltype(self)>, COUNT, COUNT, 1uz, 1uz, 1uz>, T, DIMS..., 1uz>{ self, 0uz }; }
+        constexpr auto covector(this isVector auto& self) { return TensorType<ReferenceType<std::remove_reference_t<decltype(self)>, COUNT, COUNT, 1uz, 1uz, 1uz>, T, DIMS..., 1uz>{ self, 0uz }; }
 
-        template <typename T2, class OtherBase>
-        constexpr Vector<decltype(T()*T2()), 3uz> cross(this const Vector<T, 3uz, StorageBase>& self, const Vector<T2, 3uz, OtherBase>& v) {
+        template <typename T2, class OtherType>
+        constexpr Vector<decltype(T()*T2()), 3uz> cross(this const Vector<T, 3uz, StorageType>& self, const Vector<T2, 3uz, OtherType>& v) {
             return { self[1uz]*v[2uz] - self[2uz]*v[1uz],
                      self[2uz]*v[0uz] - self[0uz]*v[2uz],
                      self[0uz]*v[1uz] - self[1uz]*v[0uz] };
@@ -435,32 +430,23 @@ namespace linalg {
         // MATRIX SPECIALIZATIONS //
         ////////////////////////////
 
-        // Identity matrix just in case
         static constexpr auto Identity() requires(dimensionality() == 2uz) {
             return []<std::size_t M, std::size_t N, std::size_t... IDX>(SEQUENCE(IDX...)) constexpr requires(M == N) {
                 return Matrix<T, M, N>{ T((IDX % (M + 1uz)) == 0uz)... };
             }.template operator()<DIMS...>(MAKESEQUENCE(COUNT));
         }
 
+        // Matrix specific accessors
         constexpr decltype(auto) getRow(this isMatrix auto& self, std::size_t r) { return self[r]; }
         constexpr decltype(auto) getCol(this isMatrix auto& self, std::size_t c) { return self['*', c]; }
-        template <class Self>
-        constexpr decltype(auto) getDiagonal(this Self& self) requires(std::remove_cvref_t<Self>::dimensionality() > 1uz) {
-            constexpr std::size_t SMALLEST = []<std::size_t D0, std::size_t D1, std::size_t... REST>(this auto minimum) constexpr {
-                constexpr std::size_t THISMIN = std::min(D0, D1);
-                if constexpr (sizeof...(REST)) return minimum.template operator()<THISMIN, REST...>();
-                else                           return THISMIN;
-            }.template operator()<DIMS...>();
-            constexpr std::size_t STRIDE = []<std::size_t PRODUCT, std::size_t, std::size_t... REST>(this auto calcStride) constexpr {
-                if constexpr (sizeof...(REST)) return calcStride.template operator()<PRODUCT + (REST * ...), REST...>();
-                else                           return PRODUCT;
-            }.template operator()<1uz, DIMS...>();
 
-            return TensorType<ReferenceType<Self, SMALLEST, SMALLEST, STRIDE>, COPYCONST(Self, T), SMALLEST>{ self, 0uz };
+        template <std::size_t N> requires(N > 1uz)
+        constexpr T determinant(this const Matrix<T, N, N, StorageType>&) {
+            return T();
         }
 
-        template<typename T2, std::size_t M, std::size_t N, std::size_t O, class OtherBase>
-        constexpr auto operator*(this const Matrix<T, M, N, StorageBase>& self, const Matrix<T2, N, O, OtherBase>& m) {
+        template<typename T2, std::size_t M, std::size_t N, std::size_t O, class OtherType>
+        constexpr auto operator*(this const Matrix<T, M, N, StorageType>& self, const Matrix<T2, N, O, OtherType>& m) {
             return []<std::size_t... IDX>(const auto& m1, const auto& m2, SEQUENCE(IDX...)) constexpr {
                 return Matrix<decltype(T()*T2()), M, O>{ m1.getRow(IDX / O).dot(m2.getCol(IDX % O))... };
             }(self, m, MAKESEQUENCE(M*O));
@@ -468,16 +454,17 @@ namespace linalg {
     };
 
     // Right-side operator overloads
-    template <nonTensor T, class StorageBase, typename T2, std::size_t... DIMS>
-    constexpr auto operator*(const T& s, const TensorType<StorageBase, T2, DIMS...> &t) { return t.map([&s](const T& e) { return e * s; }); }
-    template <nonTensor T, class StorageBase, typename T2, std::size_t... DIMS>
-    constexpr auto operator/(const T& s, const TensorType<StorageBase, T2, DIMS...> &t) { return t.map([&s](const T& e) { return e / s; }); }
-    template <class StorageBase, typename T, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
-    constexpr std::ostream& operator<<(std::ostream& os, const TensorType<StorageBase, T, FIRSTDIM, RESTDIMS...>& t) {
+    template <nonTensor T, class StorageType, typename T2, std::size_t... DIMS>
+    constexpr auto operator*(const T& s, const TensorType<StorageType, T2, DIMS...> &t) { return t.map([&s](const T& e) { return e * s; }); }
+    template <nonTensor T, class StorageType, typename T2, std::size_t... DIMS>
+    constexpr auto operator/(const T& s, const TensorType<StorageType, T2, DIMS...> &t) { return t.map([&s](const T& e) { return e / s; }); }
+    template <class StorageType, typename T, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
+    constexpr std::ostream& operator<<(std::ostream& os, const TensorType<StorageType, T, FIRSTDIM, RESTDIMS...>& t) {
         t.template prettyPrint<(RESTDIMS * ... * 1uz), FIRSTDIM, RESTDIMS...>(os, MAKESEQUENCE(FIRSTDIM));
         return os;
     }
 
     #undef COPYCONSTFORTYPE
-    #undef MAKEINDICES
+    #undef MAKESEQUENCE
+    #undef SEQUENCE
 }

@@ -36,7 +36,7 @@ void testVectors() {
 
 void testMatrices() {
     [[maybe_unused]] constexpr auto m1 = linalg::Matrix<double, 2uz, 5uz>{ 1, 0, 1, 0, 1,
-                                                          0, 1, 0, 1, 0 };
+                                                                           0, 1, 0, 1, 0 };
     // cout << m1 << "\n" << endl;
     [[maybe_unused]] constexpr auto m2 = linalg::Matrix<float, 5uz, 3uz>{ 1, 0, 1,
                                                          0, 1, 0,
@@ -45,8 +45,8 @@ void testMatrices() {
                                                          1, 0, 1 };
     // cout << m2 << "\n" << endl;
 
-    constexpr auto m3 = m1 * m2;
-    cout << "constexpr " LINE_EVAL(m3) << endl;
+    //constexpr auto m3 = m1 * m2;
+    cout << LINE_EVAL(m1 * m2) << endl;
 
     // // Vector x Matrix multiply
     // constexpr linalg::Vector v1{linalg::TensorBase<linalg::ValueType, 1z, float, 4uz>{ 2.0f, 1.0f, 0.0f, -1.0f }};
