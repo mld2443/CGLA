@@ -10,7 +10,7 @@ void testVectors() {
     auto v1 = linalg::Vector{{ 1.0, 2.0, 3.0 }};
     cout << STR_EVAL(-v1) << "\t<- a 'value-type' vector that owns its data." << endl;
     float reallyLongArray[] = { -1.0f, -3.0f, 0.0f, 1.0f, 4.2f, 3.9f, -33.0f, 0.003f, 14.0f, 0.0f, 0.0f, 22.0f };
-    auto v2 = linalg::VectorPtr<float, 3uz, -3z>{reallyLongArray + 8uz};
+    auto v2 = linalg::VectorPtr<float, 3uz, -3z>{ reallyLongArray + 8uz };
     //                          type   size stride  parent        offset
 
     // Pointer types
@@ -45,7 +45,12 @@ void testMatrices() {
                                                          1, 0, 1 };
     // cout << m2 << "\n" << endl;
 
-    //constexpr auto m3 = m1 * m2;
+    static float reallyLongArray[] = { -1.0f, -3.0f, 0.0f, 1.0f, 4.2f, 3.9f, -33.0f, 0.003f, 14.0f, 0.0f, 0.0f, 22.0f };
+    [[maybe_unused]] constexpr auto m3 = linalg::MatrixPtr<float, 2uz, 3uz, -2>{ reallyLongArray + 10uz };
+
+    cout << LINE_EVAL(m3['*', 2][1]) << endl;
+
+    //constexpr auto m4 = m1 * m2;
     cout << LINE_EVAL(m1 * m2) << endl;
 
     // // Vector x Matrix multiply
@@ -185,8 +190,8 @@ void testTensors() {
 //////////
 int main() {
     // testVectors();
-    // testMatrices();
-    testTensors();
+    testMatrices();
+    // testTensors();
 
     return 0;
 }

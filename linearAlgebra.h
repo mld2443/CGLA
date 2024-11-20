@@ -87,7 +87,7 @@ namespace linalg {
                 if constexpr (std::is_same_v<decltype(nextInd), char>) { // nextInd is a wildcard
                     if constexpr (sizeof...(restInds))             // more given indices after this wildcard
                         return getTensor.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, restInds...);
-                    else if constexpr (sizeof...(REMAINS))        // remaining dimensions are implied wildcards
+                    else if constexpr (sizeof...(REMAINS))         // remaining dimensions are implied wildcards
                         return getTensor.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, '*');
                     else                                           // final index was given or implied wildcard
                         return TensorType<ReferenceType<RefType, (NEWDIMS * ... * THISDIM), NEWDIMSANDSTEPS..., THISDIM, 1uz>, COPYCONST(Self, std::remove_cvref_t<decltype(*self.ref.data)>), NEWDIMS..., THISDIM>(self.ref, offset);
@@ -95,12 +95,12 @@ namespace linalg {
                     offset += THISSTEP * static_cast<std::size_t>(nextInd);
                     if constexpr (sizeof...(restInds))             // more constraints to get through and/or there are unconstrained dimensions
                         return getTensor.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS...>{}, TList<NEWDIMS...>{}, offset, restInds...);
-                    else if constexpr (sizeof...(REMAINS))        // remaining dimensions are implied wildcards
+                    else if constexpr (sizeof...(REMAINS))         // remaining dimensions are implied wildcards
                         return getTensor.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS...>{}, TList<NEWDIMS...>{}, offset, '*');
                     else if constexpr (sizeof...(NEWDIMSANDSTEPS)) // all indices were given but at least one was a wildcard
                         return TensorType<ReferenceType<RefType, (NEWDIMS * ...), NEWDIMSANDSTEPS...>, COPYCONST(Self, std::remove_cvref_t<decltype(*self.ref.data)>), NEWDIMS...>(self.ref, offset);
                     else                                           // all indices given, no wildcards
-                        return *(self.ref.data + offset);
+                        return self.ref.get(offset);
                 }
             }.template operator()<DIMSANDSTEPS...>(std::forward<Self>(self), {}, {}, self.offset, first, inds...);
         }
@@ -222,7 +222,6 @@ namespace linalg {
 
     template <class StorageType, typename T, std::size_t... DIMS>
     struct TensorType final : StorageType {
-    private:
         template <class, std::size_t, std::size_t...>
         friend struct ReferenceType;
         template <class, typename, std::size_t...>
@@ -230,7 +229,7 @@ namespace linalg {
         template <class OtherType, typename T2, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
         friend constexpr std::ostream& operator<<(std::ostream& os, const TensorType<OtherType, T2, FIRSTDIM, RESTDIMS...>& t);
         using StorageType::COUNT;
-        using StorageType::get;   // Accessor addressing flat array of data, used internally to perform map
+        using StorageType::get;   // Accessor addressing flat array of data, used internally to perform mappings and iterate
 
         // Special 'template container' prettyPrint() uses to build compile-time whitespace
         template <char... Cs> struct TString { static constexpr char STR[] = {Cs..., '\0'}; };
@@ -307,9 +306,12 @@ namespace linalg {
             }(func, starting, MAKESEQUENCE(COUNT));
         }
         constexpr auto reduce(auto&& func) const {
-            return [this]<std::size_t... IDX>(auto& func, T starting, SEQUENCE(IDX...)) constexpr {
-                return ((starting = func(starting, get(1uz + IDX))), ...);
-            }(func, get(0uz), MAKESEQUENCE(COUNT - 1uz));
+            if constexpr (COUNT == 1uz)
+                return get(0uz);
+            else
+                return [this]<std::size_t... IDX>(auto& func, T starting, SEQUENCE(IDX...)) constexpr {
+                    return ((starting = func(starting, get(1uz + IDX))), ...);
+                }(func, get(0uz), MAKESEQUENCE(COUNT - 1uz));
         }
 
         // Member operator overloads
@@ -374,7 +376,7 @@ namespace linalg {
                             return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), TList<DIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, restInds...);
                         else if constexpr (sizeof...(RESTDIMS))     // remaining dimensions are implied wildcards
                             return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), TList<DIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, '*');
-                        else                                        // final index was given or implied wildcard
+                        else                                        // final index was given as or implied to be a wildcard
                             return TensorType<ReferenceType<Self, (NEWDIMS * ... * THISDIM), DIMSANDSTEPS..., THISDIM, 1uz>, COPYCONST(Self, T), NEWDIMS..., THISDIM>(std::forward<Self>(self), offset);
                     } else {
                         offset += THISSTEP * static_cast<std::size_t>(nextInd);
@@ -385,9 +387,9 @@ namespace linalg {
                         else if constexpr (sizeof...(DIMSANDSTEPS)) // all indices were given but at least one was a wildcard
                             return TensorType<ReferenceType<Self, (NEWDIMS * ...), DIMSANDSTEPS...>, COPYCONST(Self, T), NEWDIMS...>(std::forward<Self>(self), offset);
                         else                                        // all indices given, no wildcards
-                            return *(self.data + offset);
+                            return self.get(offset);
                     }
-                }.template operator()<COUNT, DIMS...>(std::forward<Self>(self), {}, {}, 0z, first, inds...);
+                }.template operator()<COUNT, DIMS...>(std::forward<Self>(self), {}, {}, 0uz, first, inds...);
         }
 
         template <class Self>
@@ -462,6 +464,6 @@ namespace linalg {
     }
 }
 
-#undef COPYCONSTFORTYPE
+#undef COPYCONST
 #undef MAKESEQUENCE
 #undef SEQUENCE
