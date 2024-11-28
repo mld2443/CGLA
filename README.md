@@ -8,7 +8,7 @@ Linear Algebra in C++ is often messy, verbose, cluttered, and/or opaque. Inspire
 
 1. "It just works" - Flexibility and transparency from implementation, usage should look as close to formulae and equations as C++ allows
 1. Compile-time evaluation and inlining as much as possible, make your compiler work for you
-1. As generic as possible, multilinear tensors of arbitrary dimensionality and size, even if I don't know what to do with them
+1. As generic as possible, multidimensional matrices of arbitrary dimensionality and size, even if there's not so many use cases for them
 1. As clean and compact as I can make it
 
 ### Things it does not do
@@ -22,7 +22,7 @@ Linear Algebra in C++ is often messy, verbose, cluttered, and/or opaque. Inspire
 ## Todo
 
 - Pure, python-style slicing per dimension(4)
-- Tensor contraction(4)
+- Tensor contraction(4)?
 - Matrix transpose(3)
 - Covector -> Matrix(1)
 - Matrix ops: eigenvector/value(3), determinant(3), invert(1), rank(3), ...

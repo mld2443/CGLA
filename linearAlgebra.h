@@ -50,7 +50,7 @@
 
 namespace linalg {
     template <class StorageBase, typename T, std::size_t... DIMS>
-    struct TensorType;
+    struct MultidimType;
 
     template <std::size_t...> class TList {};
 
@@ -81,24 +81,24 @@ namespace linalg {
         template <class Self>
         constexpr decltype(auto) deref(this Self&& self, auto first, auto... inds) {
             return []<std::size_t THISDIM, std::size_t THISSTEP, std::size_t... REMAINS, std::size_t... NEWDIMSANDSTEPS, std::size_t... NEWDIMS>(
-                        this auto getTensor, Self&& self,
+                        this auto getSubstruct, Self&& self,
                         TList<NEWDIMSANDSTEPS...>&&, TList<NEWDIMS...>&&,
                         std::size_t offset, auto nextInd, auto... restInds) constexpr -> decltype(auto) {
                 if constexpr (std::is_same_v<decltype(nextInd), char>) { // nextInd is a wildcard
                     if constexpr (sizeof...(restInds))             // more given indices after this wildcard
-                        return getTensor.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, restInds...);
+                        return getSubstruct.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, restInds...);
                     else if constexpr (sizeof...(REMAINS))         // remaining dimensions are implied wildcards
-                        return getTensor.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, '*');
+                        return getSubstruct.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, '*');
                     else                                           // final index was given or implied wildcard
-                        return TensorType<ReferenceType<RefType, (NEWDIMS * ... * THISDIM), NEWDIMSANDSTEPS..., THISDIM, 1uz>, COPYCONST(Self, std::remove_cvref_t<decltype(*self.ref.data)>), NEWDIMS..., THISDIM>(self.ref, offset);
+                        return MultidimType<ReferenceType<RefType, (NEWDIMS * ... * THISDIM), NEWDIMSANDSTEPS..., THISDIM, 1uz>, COPYCONST(Self, std::remove_cvref_t<decltype(*self.ref.data)>), NEWDIMS..., THISDIM>(self.ref, offset);
                 } else {
                     offset += THISSTEP * static_cast<std::size_t>(nextInd);
                     if constexpr (sizeof...(restInds))             // more constraints to get through and/or there are unconstrained dimensions
-                        return getTensor.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS...>{}, TList<NEWDIMS...>{}, offset, restInds...);
+                        return getSubstruct.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS...>{}, TList<NEWDIMS...>{}, offset, restInds...);
                     else if constexpr (sizeof...(REMAINS))         // remaining dimensions are implied wildcards
-                        return getTensor.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS...>{}, TList<NEWDIMS...>{}, offset, '*');
+                        return getSubstruct.template operator()<REMAINS...>(std::forward<Self>(self), TList<NEWDIMSANDSTEPS...>{}, TList<NEWDIMS...>{}, offset, '*');
                     else if constexpr (sizeof...(NEWDIMSANDSTEPS)) // all indices were given but at least one was a wildcard
-                        return TensorType<ReferenceType<RefType, (NEWDIMS * ...), NEWDIMSANDSTEPS...>, COPYCONST(Self, std::remove_cvref_t<decltype(*self.ref.data)>), NEWDIMS...>(self.ref, offset);
+                        return MultidimType<ReferenceType<RefType, (NEWDIMS * ...), NEWDIMSANDSTEPS...>, COPYCONST(Self, std::remove_cvref_t<decltype(*self.ref.data)>), NEWDIMS...>(self.ref, offset);
                     else                                           // all indices given, no wildcards
                         return self.ref.get(offset);
                 }
@@ -176,65 +176,66 @@ namespace linalg {
         constexpr decltype(auto) get(this auto&& self, std::size_t i) { return *(self.data + i); }
     };
 
-    ////////////
-    // TENSOR //
-    ////////////
+    //////////////////////
+    // Multidimensional //
+    //////////////////////
 
     // Convenience aliases
     template <typename T, std::size_t... DIMS>
-    using Tensor = TensorType<ValueType<T, DIMS...>, T, DIMS...>;
+    using Multidimensional = MultidimType<ValueType<T, DIMS...>, T, DIMS...>;
     template <typename T, std::size_t M, std::size_t N, class StorageType = ValueType<T, M, N>>
-    using Matrix = TensorType<StorageType, T, M, N>;
+    using Matrix = MultidimType<StorageType, T, M, N>;
     template <typename T, std::size_t M, std::size_t N, std::ptrdiff_t STRIDE = 1z>
-    using MatrixPtr = TensorType<PointerType<T, M * N, STRIDE>, T, M, N>;
+    using MatrixPtr = MultidimType<PointerType<T, M * N, STRIDE>, T, M, N>;
     template <typename T, std::size_t N, class StorageType = ValueType<T, N>>
-    using Vector = TensorType<StorageType, T, N>;
+    using Vector = MultidimType<StorageType, T, N>;
     template <typename T, std::size_t N, std::ptrdiff_t STRIDE = 1z>
-    using VectorPtr = TensorType<PointerType<T, N, STRIDE>, T, N>;
+    using VectorPtr = MultidimType<PointerType<T, N, STRIDE>, T, N>;
 
     // Concepts for dimension-dependant specializations
-    template <class T> concept isVector = requires { T::dimensionality(); } && T::dimensionality() == 1uz;
-    template <class T> concept isMatrix = requires { T::dimensionality(); } && T::dimensionality() == 2uz;
-    template <class T> concept nonTensor = !requires { T::dimensionality(); } || T::dimensionality() == 0uz;
+    template <class T> concept isVector = requires { T::order(); } && T::order() == 1uz;
+    template <class T> concept isMatrix = requires { T::order(); } && T::order() == 2uz;
+    template <class T> concept nonArray = !requires { T::order(); } || T::order() == 0uz;
 
     // Deduction guides for value-initialization
     // Anything higher than 10-dimensional can still be value-initialized, but template params must be explicit
     template <typename T, std::size_t D0>
-    TensorType(T (&&)[D0]) -> TensorType<ValueType<T, D0>, T, D0>;
+    MultidimType(T (&&)[D0]) -> MultidimType<ValueType<T, D0>, T, D0>;
     template <typename T, std::size_t D0, std::size_t D1>
-    TensorType(T (&&)[D0][D1]) -> TensorType<ValueType<T, D0, D1>, T, D0, D1>;
+    MultidimType(T (&&)[D0][D1]) -> MultidimType<ValueType<T, D0, D1>, T, D0, D1>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2>
-    TensorType(T (&&)[D0][D1][D2]) -> TensorType<ValueType<T, D0, D1, D2>, T, D0, D1, D2>;
+    MultidimType(T (&&)[D0][D1][D2]) -> MultidimType<ValueType<T, D0, D1, D2>, T, D0, D1, D2>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3>
-    TensorType(T (&&)[D0][D1][D2][D3]) -> TensorType<ValueType<T, D0, D1, D2, D3>, T, D0, D1, D2, D3>;
+    MultidimType(T (&&)[D0][D1][D2][D3]) -> MultidimType<ValueType<T, D0, D1, D2, D3>, T, D0, D1, D2, D3>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3, std::size_t D4>
-    TensorType(T (&&)[D0][D1][D2][D3][D4]) -> TensorType<ValueType<T, D0, D1, D2, D3, D4>, T, D0, D1, D2, D3, D4>;
+    MultidimType(T (&&)[D0][D1][D2][D3][D4]) -> MultidimType<ValueType<T, D0, D1, D2, D3, D4>, T, D0, D1, D2, D3, D4>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3, std::size_t D4, std::size_t D5>
-    TensorType(T (&&)[D0][D1][D2][D3][D4][D5]) -> TensorType<ValueType<T, D0, D1, D2, D3, D4, D5>, T, D0, D1, D2, D3, D4, D5>;
+    MultidimType(T (&&)[D0][D1][D2][D3][D4][D5]) -> MultidimType<ValueType<T, D0, D1, D2, D3, D4, D5>, T, D0, D1, D2, D3, D4, D5>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3, std::size_t D4, std::size_t D5, std::size_t D6>
-    TensorType(T (&&)[D0][D1][D2][D3][D4][D5][D6]) -> TensorType<ValueType<T, D0, D1, D2, D3, D4, D5, D6>, T, D0, D1, D2, D3, D4, D5, D6>;
+    MultidimType(T (&&)[D0][D1][D2][D3][D4][D5][D6]) -> MultidimType<ValueType<T, D0, D1, D2, D3, D4, D5, D6>, T, D0, D1, D2, D3, D4, D5, D6>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3, std::size_t D4, std::size_t D5, std::size_t D6, std::size_t D7>
-    TensorType(T (&&)[D0][D1][D2][D3][D4][D5][D6][D7]) -> TensorType<ValueType<T, D0, D1, D2, D3, D4, D5, D6, D7>, T, D0, D1, D2, D3, D4, D5, D6, D7>;
+    MultidimType(T (&&)[D0][D1][D2][D3][D4][D5][D6][D7]) -> MultidimType<ValueType<T, D0, D1, D2, D3, D4, D5, D6, D7>, T, D0, D1, D2, D3, D4, D5, D6, D7>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3, std::size_t D4, std::size_t D5, std::size_t D6, std::size_t D7, std::size_t D8>
-    TensorType(T (&&)[D0][D1][D2][D3][D4][D5][D6][D7][D8]) -> TensorType<ValueType<T, D0, D1, D2, D3, D4, D5, D6, D7, D8>, T, D0, D1, D2, D3, D4, D5, D6, D7, D8>;
+    MultidimType(T (&&)[D0][D1][D2][D3][D4][D5][D6][D7][D8]) -> MultidimType<ValueType<T, D0, D1, D2, D3, D4, D5, D6, D7, D8>, T, D0, D1, D2, D3, D4, D5, D6, D7, D8>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3, std::size_t D4, std::size_t D5, std::size_t D6, std::size_t D7, std::size_t D8, std::size_t D9>
-    TensorType(T (&&)[D0][D1][D2][D3][D4][D5][D6][D7][D8][D9]) -> TensorType<ValueType<T, D0, D1, D2, D3, D4, D5, D6, D7, D8, D9>, T, D0, D1, D2, D3, D4, D5, D6, D7, D8, D9>;
+    MultidimType(T (&&)[D0][D1][D2][D3][D4][D5][D6][D7][D8][D9]) -> MultidimType<ValueType<T, D0, D1, D2, D3, D4, D5, D6, D7, D8, D9>, T, D0, D1, D2, D3, D4, D5, D6, D7, D8, D9>;
 
     template <class StorageType, typename T, std::size_t... DIMS>
-    struct TensorType final : StorageType {
+    struct MultidimType final : StorageType {
+    private:
         template <class, std::size_t, std::size_t...>
         friend struct ReferenceType;
         template <class, typename, std::size_t...>
-        friend struct TensorType; // Allows different instantiations to use protected get()
+        friend struct MultidimType; // Allows different instantiations to use protected get()
         template <class OtherType, typename T2, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
-        friend constexpr std::ostream& operator<<(std::ostream& os, const TensorType<OtherType, T2, FIRSTDIM, RESTDIMS...>& t);
+        friend constexpr std::ostream& operator<<(std::ostream& os, const MultidimType<OtherType, T2, FIRSTDIM, RESTDIMS...>& t);
         using StorageType::COUNT;
         using StorageType::get;   // Accessor addressing flat array of data, used internally to perform mappings and iterate
 
         // Special 'template container' prettyPrint() uses to build compile-time whitespace
         template <char... Cs> struct TString { static constexpr char STR[] = {Cs..., '\0'}; };
 
-        // Helper for operator<<, displays arbitrary dimensional tensors in a human-readable format
+        // Helper for operator<<, displays arbitrary dimensional structures in a human-readable format
         template <std::size_t STEP, std::size_t THISDIM, std::size_t NEXTDIM = 0uz, std::size_t... RESTDIMS, char... PRFX, std::size_t... IDX>
         constexpr void prettyPrint(std::ostream& os, SEQUENCE(IDX...), std::size_t offset = 0uz, TString<PRFX...> prefix = {}) const {
             auto genSpace = []<std::size_t... IDX2>(SEQUENCE(IDX2...)) constexpr { return TString<PRFX..., (' ' + static_cast<char>(0uz & IDX2))...>(); };
@@ -256,7 +257,7 @@ namespace linalg {
     public:
         // Constructors
         using StorageType::StorageType;
-        static constexpr auto broadcast(T&& s) { return [&]<std::size_t... IDX>(SEQUENCE(IDX...)) constexpr { return TensorType<StorageType, T, DIMS...>{ s + T(IDX & 0uz)... }; }(MAKESEQUENCE(COUNT)); }
+        static constexpr auto broadcast(T&& s) { return [&]<std::size_t... IDX>(SEQUENCE(IDX...)) constexpr { return MultidimType<StorageType, T, DIMS...>{ s + T(IDX & 0uz)... }; }(MAKESEQUENCE(COUNT)); }
 
         // Iterator for for-each loops
         template <class QualifiedType>
@@ -276,18 +277,18 @@ namespace linalg {
         constexpr auto   end(this auto& self) { return Iterator<decltype(self)>{ self , COUNT }; }
 
         // Metadata
-        static constexpr std::size_t count()          { return COUNT; }
-        static constexpr std::size_t dimensionality() { return sizeof...(DIMS); }
+        static constexpr std::size_t count() { return COUNT; }
+        static constexpr std::size_t order() { return sizeof...(DIMS); }
 
         // Functional programming
         constexpr auto map(auto&& func) const {
             return [this]<std::size_t... IDX>(auto& func, SEQUENCE(IDX...)) constexpr {
-                return Tensor<decltype(func(T())), DIMS...>{ func(get(IDX))... };
+                return Multidimensional<decltype(func(T())), DIMS...>{ func(get(IDX))... };
             }(func, MAKESEQUENCE(COUNT));
         }
         constexpr auto binaryMap(auto&& func, const auto& t) const {
-            return [this]<class OtherType, typename T2, std::size_t... IDX>(auto& func, const TensorType<OtherType, T2, DIMS...>& t, SEQUENCE(IDX...)) constexpr {
-                return Tensor<decltype(func(T(), T2())), DIMS...>{ func(get(IDX), t.get(IDX))... };
+            return [this]<class OtherType, typename T2, std::size_t... IDX>(auto& func, const MultidimType<OtherType, T2, DIMS...>& t, SEQUENCE(IDX...)) constexpr {
+                return Multidimensional<decltype(func(T(), T2())), DIMS...>{ func(get(IDX), t.get(IDX))... };
             }(func, t, MAKESEQUENCE(COUNT));
         }
         inline void mapWrite(auto&& func) {
@@ -296,7 +297,7 @@ namespace linalg {
             }(func, MAKESEQUENCE(COUNT));
         }
         inline void binaryMapWrite(auto&& func, const auto& t) {
-            [this]<class OtherType, typename T2, std::size_t... IDX>(auto& func, const TensorType<OtherType, T2, DIMS...>& t, SEQUENCE(IDX...)) constexpr {
+            [this]<class OtherType, typename T2, std::size_t... IDX>(auto& func, const MultidimType<OtherType, T2, DIMS...>& t, SEQUENCE(IDX...)) constexpr {
                 (func(get(IDX), t.get(IDX)), ...);
             }(func, t, MAKESEQUENCE(COUNT));
         }
@@ -316,14 +317,14 @@ namespace linalg {
 
         // Member operator overloads
         constexpr auto operator-(                       ) const { return map([  ](const T& e){ return    -e; }); }
-        constexpr auto operator*(const nonTensor auto& s) const { return map([&s](const T& e){ return e * s; }); }
-        constexpr auto operator/(const nonTensor auto& s) const { return map([&s](const T& e){ return e / s; }); }
+        constexpr auto operator*(const nonArray auto& s) const { return map([&s](const T& e){ return e * s; }); }
+        constexpr auto operator/(const nonArray auto& s) const { return map([&s](const T& e){ return e / s; }); }
         constexpr auto operator+(const           auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 + e2; }, t); }
         constexpr auto operator-(const           auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 - e2; }, t); }
 
         // Mutating operators
-        inline auto& operator*=(const nonTensor auto& s) { mapWrite([&s](T& e){ e *= s; }); return *this; }
-        inline auto& operator/=(const nonTensor auto& s) { mapWrite([&s](T& e){ e /= s; }); return *this; }
+        inline auto& operator*=(const nonArray auto& s) { mapWrite([&s](T& e){ e *= s; }); return *this; }
+        inline auto& operator/=(const nonArray auto& s) { mapWrite([&s](T& e){ e /= s; }); return *this; }
         inline auto& operator+=(const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 += e2; }, t); return *this; }
         inline auto& operator-=(const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 -= e2; }, t); return *this; }
         inline auto& operator= (const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 =  e2; }, t); return *this; }
@@ -342,7 +343,7 @@ namespace linalg {
         // }
 
         template <std::size_t CONTRACTIONS, class OtherType, typename T2, std::size_t... DIMS2> requires(CONTRACTIONS > 0uz)
-        constexpr auto contract(this const TensorType<StorageType, T, DIMS...>& , const TensorType<OtherType, T2, DIMS2...>& )
+        constexpr auto contract(this const MultidimType<StorageType, T, DIMS...>& , const MultidimType<OtherType, T2, DIMS2...>& )
         requires([](std::size_t (&&d1)[sizeof...(DIMS)], std::size_t (&&d2)[sizeof...(DIMS2)]){
             for (std::size_t i = 0uz; i < CONTRACTIONS; ++i)
                 if (d1[sizeof...(DIMS) - CONTRACTIONS + i] != d2[i])
@@ -353,7 +354,7 @@ namespace linalg {
         }
 
         // template<class OtherType, typename T2, std::size_t... DIMS2>
-        // constexpr auto operator*(this const TensorType<StorageType, T, DIMS...>& self, const TensorType<OtherType, T2, DIMS2...>& t) requires(TensorType<StorageType, T, DIMS...>::findLargestOverlap({ DIMS... }, { DIMS2... }) > 0uz) {
+        // constexpr auto operator*(this const MultidimType<StorageType, T, DIMS...>& self, const MultidimType<OtherType, T2, DIMS2...>& t) requires(MultidimType<StorageType, T, DIMS...>::findLargestOverlap({ DIMS... }, { DIMS2... }) > 0uz) {
         //     return self.contract<findLargestOverlap({ DIMS... }, { DIMS2... })>(t);
         // }
 
@@ -367,25 +368,25 @@ namespace linalg {
                 return self.deref(first, inds...);
             else
                 return []<std::size_t STEP, std::size_t THISDIM, std::size_t... RESTDIMS, std::size_t... DIMSANDSTEPS, std::size_t... NEWDIMS>(
-                            this auto getTensor, Self&& self,
+                            this auto getSubstruct, Self&& self,
                             TList<DIMSANDSTEPS...>&&, TList<NEWDIMS...>&&,
                             std::size_t offset, auto nextInd, auto... restInds) constexpr -> decltype(auto) {
                     constexpr std::size_t THISSTEP = STEP / THISDIM;
                     if constexpr (std::is_same_v<decltype(nextInd), char>) { // nextInd is a wildcard
                         if constexpr (sizeof...(restInds))          // more given indices after this wildcard
-                            return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), TList<DIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, restInds...);
+                            return getSubstruct.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), TList<DIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, restInds...);
                         else if constexpr (sizeof...(RESTDIMS))     // remaining dimensions are implied wildcards
-                            return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), TList<DIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, '*');
+                            return getSubstruct.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), TList<DIMSANDSTEPS..., THISDIM, THISSTEP>{}, TList<NEWDIMS..., THISDIM>{}, offset, '*');
                         else                                        // final index was given as or implied to be a wildcard
-                            return TensorType<ReferenceType<Self, (NEWDIMS * ... * THISDIM), DIMSANDSTEPS..., THISDIM, 1uz>, COPYCONST(Self, T), NEWDIMS..., THISDIM>(std::forward<Self>(self), offset);
+                            return MultidimType<ReferenceType<Self, (NEWDIMS * ... * THISDIM), DIMSANDSTEPS..., THISDIM, 1uz>, COPYCONST(Self, T), NEWDIMS..., THISDIM>(std::forward<Self>(self), offset);
                     } else {
                         offset += THISSTEP * static_cast<std::size_t>(nextInd);
                         if constexpr (sizeof...(restInds))          // more constraints to get through and/or there are unconstrained dimensions
-                            return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), TList<DIMSANDSTEPS...>{}, TList<NEWDIMS...>{}, offset, restInds...);
+                            return getSubstruct.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), TList<DIMSANDSTEPS...>{}, TList<NEWDIMS...>{}, offset, restInds...);
                         else if constexpr (sizeof...(RESTDIMS))     // remaining dimensions are implied wildcards
-                            return getTensor.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), TList<DIMSANDSTEPS...>{}, TList<NEWDIMS...>{}, offset, '*');
+                            return getSubstruct.template operator()<THISSTEP, RESTDIMS...>(std::forward<Self>(self), TList<DIMSANDSTEPS...>{}, TList<NEWDIMS...>{}, offset, '*');
                         else if constexpr (sizeof...(DIMSANDSTEPS)) // all indices were given but at least one was a wildcard
-                            return TensorType<ReferenceType<Self, (NEWDIMS * ...), DIMSANDSTEPS...>, COPYCONST(Self, T), NEWDIMS...>(std::forward<Self>(self), offset);
+                            return MultidimType<ReferenceType<Self, (NEWDIMS * ...), DIMSANDSTEPS...>, COPYCONST(Self, T), NEWDIMS...>(std::forward<Self>(self), offset);
                         else                                        // all indices given, no wildcards
                             return self.get(offset);
                     }
@@ -393,7 +394,7 @@ namespace linalg {
         }
 
         template <class Self>
-        constexpr decltype(auto) getDiagonal(this Self& self) requires(std::remove_cvref_t<Self>::dimensionality() > 1uz) {
+        constexpr decltype(auto) getDiagonal(this Self& self) requires(std::remove_cvref_t<Self>::order() > 1uz) {
             constexpr std::size_t SMALLEST = []<std::size_t D0, std::size_t D1, std::size_t... REST>(this auto minimum) constexpr {
                 if constexpr (sizeof...(REST)) return minimum.template operator()<std::min(D0, D1), REST...>();
                 else                           return std::min(D0, D1);
@@ -403,7 +404,7 @@ namespace linalg {
                 else                           return PRODUCT;
             }.template operator()<1uz, DIMS...>();
 
-            return TensorType<ReferenceType<Self, SMALLEST, SMALLEST, STRIDE>, COPYCONST(Self, T), SMALLEST>{ self, 0uz };
+            return MultidimType<ReferenceType<Self, SMALLEST, SMALLEST, STRIDE>, COPYCONST(Self, T), SMALLEST>{ self, 0uz };
         }
 
         ////////////////////////////
@@ -416,7 +417,7 @@ namespace linalg {
         constexpr T magnitudeSqr(this const isVector auto& self) { return self.dot(self);                 }
         constexpr T    magnitude(this const isVector auto& self) { return std::sqrt(self.magnitudeSqr()); }
         constexpr auto direction(this const isVector auto& self) { return self / self.magnitude();        }
-        constexpr auto covector(this isVector auto& self) { return TensorType<ReferenceType<std::remove_reference_t<decltype(self)>, COUNT, COUNT, 1uz, 1uz, 1uz>, T, DIMS..., 1uz>{ self, 0uz }; }
+        constexpr auto covector(this isVector auto& self) { return MultidimType<ReferenceType<std::remove_reference_t<decltype(self)>, COUNT, COUNT, 1uz, 1uz, 1uz>, T, DIMS..., 1uz>{ self, 0uz }; }
 
         template <typename T2, class OtherType>
         constexpr Vector<decltype(T()*T2()), 3uz> cross(this const Vector<T, 3uz, StorageType>& self, const Vector<T2, 3uz, OtherType>& v) {
@@ -429,7 +430,7 @@ namespace linalg {
         // MATRIX SPECIALIZATIONS //
         ////////////////////////////
 
-        static constexpr auto Identity() requires(dimensionality() == 2uz) {
+        static constexpr auto Identity() requires(order() == 2uz) {
             return []<std::size_t M, std::size_t N, std::size_t... IDX>(SEQUENCE(IDX...)) constexpr requires(M == N) {
                 return Matrix<T, M, N>{ T((IDX % (M + 1uz)) == 0uz)... };
             }.template operator()<DIMS...>(MAKESEQUENCE(COUNT));
@@ -454,11 +455,11 @@ namespace linalg {
 
     // Right-side operator overloads
     template <class StorageType, typename T, std::size_t... DIMS>
-    constexpr auto operator*(const nonTensor auto& s, const TensorType<StorageType, T, DIMS...> &t) { return t.map([&s](const T& e) { return e * s; }); }
+    constexpr auto operator*(const nonArray auto& s, const MultidimType<StorageType, T, DIMS...> &t) { return t.map([&s](const T& e) { return e * s; }); }
     template <class StorageType, typename T, std::size_t... DIMS>
-    constexpr auto operator/(const nonTensor auto& s, const TensorType<StorageType, T, DIMS...> &t) { return t.map([&s](const T& e) { return e / s; }); }
+    constexpr auto operator/(const nonArray auto& s, const MultidimType<StorageType, T, DIMS...> &t) { return t.map([&s](const T& e) { return e / s; }); }
     template <class StorageType, typename T, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
-    constexpr std::ostream& operator<<(std::ostream& os, const TensorType<StorageType, T, FIRSTDIM, RESTDIMS...>& t) {
+    constexpr std::ostream& operator<<(std::ostream& os, const MultidimType<StorageType, T, FIRSTDIM, RESTDIMS...>& t) {
         t.template prettyPrint<(RESTDIMS * ... * 1uz), FIRSTDIM, RESTDIMS...>(os, MAKESEQUENCE(FIRSTDIM));
         return os;
     }

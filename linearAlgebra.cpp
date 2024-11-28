@@ -53,10 +53,6 @@ void testMatrices() {
     //constexpr auto m4 = m1 * m2;
     cout << LINE_EVAL(m1 * m2) << endl;
 
-    // // Vector x Matrix multiply
-    // constexpr linalg::Vector v1{linalg::TensorBase<linalg::ValueType, 1z, float, 4uz>{ 2.0f, 1.0f, 0.0f, -1.0f }};
-    // cout << STR_EVAL(v1) << endl;
-
     auto m5 = linalg::Matrix<unsigned, 5uz, 5uz>::Identity();
     m5.getRow(3uz) += linalg::Vector<uint32_t, 5uz>::broadcast(4u);
     m5.getRow(0uz) = m5.getCol(4uz);
@@ -64,9 +60,9 @@ void testMatrices() {
     cout << LINE_EVAL(m5) << endl;
 }
 
-void testTensors() {
-    // Massive 6-dimensional multilinear tensor
-    auto tensor1 = linalg::Tensor{
+void testHigherDims() {
+    // Massive 6-dimensional multidimensional matrix
+    auto h1 = linalg::Multidimensional{
         {{{{{{  0,  1,  2},
              {  3,  4,  5}},
                 {{  6,  7,  8},
@@ -147,22 +143,22 @@ void testTensors() {
                          {213,214,215}}}}}}
     };
 
-    //cout << STR_EVAL(sizeof(tensor1)) << "\n" LINE_EVAL(tensor1) << "\n" << endl;
+    //cout << STR_EVAL(sizeof(h1)) << "\n" LINE_EVAL(h1) << "\n" << endl;
 
-    cout << "Incrementing all values in slice 'tensor1[0, '*', 1, 0]'" << endl;
-    for (auto &elem : tensor1[0, '*', 1, 0]) {
+    cout << "Incrementing all values in slice 'h1[0, '*', 1, 0]'" << endl;
+    for (auto &elem : h1[0, '*', 1, 0]) {
         cout << elem << " ";
         ++elem;
     }
     cout << endl;
 
-    cout << STR_EVAL(++tensor1[0, 2, 1, 0, 0, 1]) << endl;
-    cout << STR_EVAL(++tensor1[0][2, 1, 0][0, 1]) << endl;
-    cout << STR_EVAL(++tensor1[0][2][1][0][0][1]) << endl;
-    cout << STR_EVAL(++tensor1[0, '*', '*', 0, 0][2, 1, 1]) << endl;
-    cout << STR_EVAL(tensor1['*', '*', '*', '*', '*', 1]['*', '*', '*', '*', 0]['*', '*', '*', 0]['*', '*', 1]['*', 2][0]) << endl;
+    cout << STR_EVAL(++h1[0, 2, 1, 0, 0, 1]) << endl;
+    cout << STR_EVAL(++h1[0][2, 1, 0][0, 1]) << endl;
+    cout << STR_EVAL(++h1[0][2][1][0][0][1]) << endl;
+    cout << STR_EVAL(++h1[0, '*', '*', 0, 0][2, 1, 1]) << endl;
+    cout << STR_EVAL(h1['*', '*', '*', '*', '*', 1]['*', '*', '*', '*', 0]['*', '*', '*', 0]['*', '*', 1]['*', 2][0]) << endl;
 
-    constexpr auto tensor2 = linalg::Tensor<double, 2uz, 2uz, 3uz, 4uz>{
+    constexpr auto h2 = linalg::Multidimensional<double, 2uz, 2uz, 3uz, 4uz>{
          0,  1,  2,  3,
          4,  5,  6,  7,
          8,  9, 10, 11,
@@ -177,12 +173,12 @@ void testTensors() {
             44, 45, 46, 47
     };
 
-    //constexpr auto tensor3 = linalg::Tensor<int, 2uz, 3uz, 4uz, 5uz>::broadcast(3);
+    //constexpr auto h3 = linalg::Multidimensional<int, 2uz, 3uz, 4uz, 5uz>::broadcast(3);
 
-    //cout << tensor2.contract<0uz>(tensor3) << endl;
+    //cout << h2.contract<0uz>(h3) << endl;
 
     // Test for compile-time evaluation
-    static_assert(tensor2['*', 1][0, '*', 2][2] > 0);
+    static_assert(h2['*', 1][0, '*', 2][2] > 0);
 }
 
 //////////
@@ -191,7 +187,7 @@ void testTensors() {
 int main() {
     // testVectors();
     testMatrices();
-    // testTensors();
+    // testHigherDims();
 
     return 0;
 }
