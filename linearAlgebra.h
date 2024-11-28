@@ -319,15 +319,26 @@ namespace linalg {
         constexpr auto operator-(                       ) const { return map([  ](const T& e){ return    -e; }); }
         constexpr auto operator*(const nonArray auto& s) const { return map([&s](const T& e){ return e * s; }); }
         constexpr auto operator/(const nonArray auto& s) const { return map([&s](const T& e){ return e / s; }); }
-        constexpr auto operator+(const           auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 + e2; }, t); }
-        constexpr auto operator-(const           auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 - e2; }, t); }
+        constexpr auto operator+(const          auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 + e2; }, t); }
+        constexpr auto operator-(const          auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 - e2; }, t); }
 
         // Mutating operators
         inline auto& operator*=(const nonArray auto& s) { mapWrite([&s](T& e){ e *= s; }); return *this; }
         inline auto& operator/=(const nonArray auto& s) { mapWrite([&s](T& e){ e /= s; }); return *this; }
-        inline auto& operator+=(const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 += e2; }, t); return *this; }
-        inline auto& operator-=(const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 -= e2; }, t); return *this; }
-        inline auto& operator= (const           auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 =  e2; }, t); return *this; }
+        inline auto& operator+=(const          auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 += e2; }, t); return *this; }
+        inline auto& operator-=(const          auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 -= e2; }, t); return *this; }
+        inline auto& operator= (const          auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 =  e2; }, t); return *this; }
+
+        template <std::size_t CONTRACTIONS, class OtherType, typename T2, std::size_t... DIMS2> requires(CONTRACTIONS > 0uz)
+        constexpr auto contract(this const MultidimType<StorageType, T, DIMS...>& , const MultidimType<OtherType, T2, DIMS2...>& )
+        requires([](std::size_t (&&d1)[sizeof...(DIMS)], std::size_t (&&d2)[sizeof...(DIMS2)]){
+            for (std::size_t i = 0uz; i < CONTRACTIONS; ++i)
+                if (d1[sizeof...(DIMS) - CONTRACTIONS + i] != d2[i])
+                    return false;
+            return true;
+        }({ DIMS... }, { DIMS2... })) {
+            return 0; //FIXME
+        }
 
         // Helper function for tensor contraction and matrix multiplication
         // template <std::size_t... DIMS1, std::size_t... DIMS2> requires(sizeof...(DIMS1) > 0uz && sizeof...(DIMS2) > 0uz)
@@ -341,17 +352,6 @@ namespace linalg {
         //     }
         //     return 0uz;
         // }
-
-        template <std::size_t CONTRACTIONS, class OtherType, typename T2, std::size_t... DIMS2> requires(CONTRACTIONS > 0uz)
-        constexpr auto contract(this const MultidimType<StorageType, T, DIMS...>& , const MultidimType<OtherType, T2, DIMS2...>& )
-        requires([](std::size_t (&&d1)[sizeof...(DIMS)], std::size_t (&&d2)[sizeof...(DIMS2)]){
-            for (std::size_t i = 0uz; i < CONTRACTIONS; ++i)
-                if (d1[sizeof...(DIMS) - CONTRACTIONS + i] != d2[i])
-                    return false;
-            return true;
-        }({ DIMS... }, { DIMS2... })) {
-            return 0; //FIXME
-        }
 
         // template<class OtherType, typename T2, std::size_t... DIMS2>
         // constexpr auto operator*(this const MultidimType<StorageType, T, DIMS...>& self, const MultidimType<OtherType, T2, DIMS2...>& t) requires(MultidimType<StorageType, T, DIMS...>::findLargestOverlap({ DIMS... }, { DIMS2... }) > 0uz) {
