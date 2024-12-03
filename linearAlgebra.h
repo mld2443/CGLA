@@ -316,7 +316,7 @@ namespace linalg {
         }
 
         // Member operator overloads
-        constexpr auto operator-(                       ) const { return map([  ](const T& e){ return    -e; }); }
+        constexpr auto operator-(                      ) const { return map([  ](const T& e){ return    -e; }); }
         constexpr auto operator*(const nonArray auto& s) const { return map([&s](const T& e){ return e * s; }); }
         constexpr auto operator/(const nonArray auto& s) const { return map([&s](const T& e){ return e / s; }); }
         constexpr auto operator+(const          auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 + e2; }, t); }

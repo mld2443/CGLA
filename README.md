@@ -26,3 +26,4 @@ Linear Algebra in C++ is often messy, verbose, cluttered, and/or opaque. Inspire
 - Matrix transpose(3)
 - Covector -> Matrix(1)
 - Matrix ops: eigenvector/value(3), determinant(3), invert(1), rank(3), ...
+- Convert source to unit testing(4)
