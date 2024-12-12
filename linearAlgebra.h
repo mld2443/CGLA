@@ -455,9 +455,9 @@ namespace linalg {
 
     // Right-side operator overloads
     template <class StorageType, typename T, std::size_t... DIMS>
-    constexpr auto operator*(const nonArray auto& s, const MultidimType<StorageType, T, DIMS...> &t) { return t.map([&s](const T& e) { return e * s; }); }
+    constexpr auto operator*(const nonArray auto& s, const MultidimType<StorageType, T, DIMS...> &t) { return t.map([&s](const T& e) { return s * e; }); }
     template <class StorageType, typename T, std::size_t... DIMS>
-    constexpr auto operator/(const nonArray auto& s, const MultidimType<StorageType, T, DIMS...> &t) { return t.map([&s](const T& e) { return e / s; }); }
+    constexpr auto operator/(const nonArray auto& s, const MultidimType<StorageType, T, DIMS...> &t) { return t.map([&s](const T& e) { return s / e; }); }
     template <class StorageType, typename T, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
     constexpr std::ostream& operator<<(std::ostream& os, const MultidimType<StorageType, T, FIRSTDIM, RESTDIMS...>& t) {
         t.template prettyPrint<(RESTDIMS * ... * 1uz), FIRSTDIM, RESTDIMS...>(os, MAKESEQUENCE(FIRSTDIM));
