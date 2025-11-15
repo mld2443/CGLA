@@ -2,12 +2,12 @@
 
 using namespace std;
 
-#define STR_EVAL(...) #__VA_ARGS__ "=> " << __VA_ARGS__
-#define LINE_EVAL(...) #__VA_ARGS__ "=\n" << __VA_ARGS__
+#define STR_EVAL(...) #__VA_ARGS__ " => " << __VA_ARGS__
+#define LINE_EVAL(...) #__VA_ARGS__ " =\n" << __VA_ARGS__
 
 
 void testVectors() {
-    auto v1 = linalg::Vector{{ 1.0, 2.0, 3.0 }};
+    auto v1 = linalg::Vector {{ 1.0, 2.0, 3.0 }};
     cout << STR_EVAL(-v1) << "\t<- a 'value-type' vector that owns its data." << endl;
     float reallyLongArray[] = { -1.0f, -3.0f, 0.0f, 1.0f, 4.2f, 3.9f, -33.0f, 0.003f, 14.0f, 0.0f, 0.0f, 22.0f };
     auto v2 = linalg::VectorPtr<float, 3uz, -3z>{ reallyLongArray + 8uz };
@@ -35,20 +35,24 @@ void testVectors() {
 }
 
 void testMatrices() {
-    [[maybe_unused]] constexpr auto m1 = linalg::Matrix<double, 2uz, 5uz>{ 1, 0, 1, 0, 1,
-                                                                           0, 1, 0, 1, 0 };
+    [[maybe_unused]]
+    constexpr auto m1 = linalg::Matrix<double, 2uz, 5uz> { 1, 0, 1, 0, 1,
+                                                           0, 1, 0, 1, 0 };
     // cout << m1 << "\n" << endl;
-    [[maybe_unused]] constexpr auto m2 = linalg::Matrix<float, 5uz, 3uz>{ 1, 0, 1,
-                                                         0, 1, 0,
-                                                         1, 0, 1,
-                                                         0, 1, 0,
-                                                         1, 0, 1 };
+    [[maybe_unused]]
+    constexpr auto m2 = linalg::Matrix<float, 5uz, 3uz> { 1, 0, 1,
+                                                          0, 1, 0,
+                                                          1, 0, 1,
+                                                          0, 1, 0,
+                                                          1, 0, 1 };
     // cout << m2 << "\n" << endl;
 
     static float reallyLongArray[] = { -1.0f, -3.0f, 0.0f, 1.0f, 4.2f, 3.9f, -33.0f, 0.003f, 14.0f, 0.0f, 0.0f, 22.0f };
-    [[maybe_unused]] constexpr auto m3 = linalg::MatrixPtr<float, 2uz, 3uz, -2>{ reallyLongArray + 10uz };
+    [[maybe_unused]]
+    constexpr auto m3 = linalg::MatrixPtr<float, 2uz, 3uz, -2>{ reallyLongArray + 10uz };
+    cout << LINE_EVAL(m3) << endl;
 
-    cout << LINE_EVAL(m3['*', 2][1]) << endl;
+    cout << STR_EVAL(m3['*', 2][1]) << endl;
 
     //constexpr auto m4 = m1 * m2;
     cout << LINE_EVAL(m1 * m2) << endl;
@@ -61,8 +65,9 @@ void testMatrices() {
 }
 
 void testHigherDims() {
-    // Massive 6-dimensional multidimensional matrix
-    auto h1 = linalg::Multidimensional{
+    // Massive 6-dimensional matrix, uses CTAD to deduce template of <ValueType<...>, int, 2, 3, 2, 3, 2, 3>
+    [[maybe_unused]]
+    auto h1 = linalg::Multidimensional {
         {{{{{{  0,  1,  2},
              {  3,  4,  5}},
                 {{  6,  7,  8},
@@ -143,22 +148,22 @@ void testHigherDims() {
                          {213,214,215}}}}}}
     };
 
-    //cout << STR_EVAL(sizeof(h1)) << "\n" LINE_EVAL(h1) << "\n" << endl;
+    cout << STR_EVAL(sizeof(h1)) << " bytes\n" STR_EVAL(h1.count()) << "\n" LINE_EVAL(h1) << "\n" << endl;
 
+    cout << LINE_EVAL(h1[0, '*', 1, 0]) << endl;
     cout << "Incrementing all values in slice 'h1[0, '*', 1, 0]'" << endl;
-    for (auto &elem : h1[0, '*', 1, 0]) {
-        cout << elem << " ";
+    for (auto &elem : h1[0, '*', 1, 0])
         ++elem;
-    }
-    cout << endl;
+    cout << LINE_EVAL(h1[0, '*', 1, 0]) << "\n" << endl;
 
     cout << STR_EVAL(++h1[0, 2, 1, 0, 0, 1]) << endl;
     cout << STR_EVAL(++h1[0][2, 1, 0][0, 1]) << endl;
     cout << STR_EVAL(++h1[0][2][1][0][0][1]) << endl;
     cout << STR_EVAL(++h1[0, '*', '*', 0, 0][2, 1, 1]) << endl;
-    cout << STR_EVAL(h1['*', '*', '*', '*', '*', 1]['*', '*', '*', '*', 0]['*', '*', '*', 0]['*', '*', 1]['*', 2][0]) << endl;
+    cout << STR_EVAL(++h1['*', '*', '*', '*', '*', 1]['*', '*', '*', '*', 0]['*', '*', '*', 0]['*', '*', 1]['*', 2][0]) << endl;
 
-    constexpr auto h2 = linalg::Multidimensional<double, 2uz, 2uz, 3uz, 4uz>{
+    [[maybe_unused]]
+    constexpr auto h2 = linalg::Multidimensional<double, 2uz, 2uz, 3uz, 4uz> {
          0,  1,  2,  3,
          4,  5,  6,  7,
          8,  9, 10, 11,
@@ -173,12 +178,13 @@ void testHigherDims() {
             44, 45, 46, 47
     };
 
-    //constexpr auto h3 = linalg::Multidimensional<int, 2uz, 3uz, 4uz, 5uz>::broadcast(3);
+    [[maybe_unused]]
+    constexpr auto h3 = linalg::Multidimensional<int, 4uz, 3uz, 2uz, 5uz>::broadcast(1);
 
-    //cout << h2.contract<0uz>(h3) << endl;
+    //cout << LINE_EVAL(h2.contract<3uz>(h3)) << "\n" LINE_EVAL(h2.contract<2uz>(h3)) << endl;
 
     // Test for compile-time evaluation
-    static_assert(h2['*', 1][0, '*', 2][2] > 0);
+    static_assert(h2['*', 1][0, '*', 2][2] > 0.0);
 }
 
 //////////
