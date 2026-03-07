@@ -8,7 +8,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     add_compile_options(
         -Wall -Wextra -Wpedantic
         -Wconversion -Wsign-conversion
-        #-Wno-missing-field-initializers
+        -Wno-missing-field-initializers
         #-Wno-missing-braces
     )
 elseif(MSVC)
@@ -19,7 +19,6 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 set(CMAKE_CXX_MODULE_STD ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_executable(${PROJECT_NAME})
 
@@ -28,7 +27,12 @@ add_executable(${PROJECT_NAME})
 #     CXX_STANDARD_REQUIRED True
 #     CXX_SCAN_FOR_MODULES ON
 #     CXX_MODULE_STD ON
-#     CXX_EXTENSIONS OFF
 # )
 
-target_sources(${PROJECT_NAME} PRIVATE linearAlgebra.cpp)
+target_sources(${PROJECT_NAME}
+    PRIVATE
+        linearAlgebra.cpp
+
+    PRIVATE FILE_SET modules TYPE CXX_MODULES FILES
+        linalg.cppm
+)

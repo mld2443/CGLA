@@ -1,8 +1,6 @@
-#include "linearAlgebra.h"
+import std;
 
-#include <iostream>    // cout, endl
-
-using namespace std;
+import linalg;
 
 #define STR_EVAL(...) #__VA_ARGS__ " => " << __VA_ARGS__
 #define LINE_EVAL(...) #__VA_ARGS__ " =\n" << __VA_ARGS__
@@ -11,30 +9,30 @@ using namespace std;
 namespace {
     [[maybe_unused]] void testVectors() {
         auto v1 = linalg::Vector {{ 1.0, 2.0, 3.0 }};
-        cout << STR_EVAL(-v1) << "\t<- a 'value-type' vector that owns its data." << endl;
+        std::cout << STR_EVAL(-v1) << "\t<- a 'value-type' vector that owns its data." << std::endl;
         float reallyLongArray[] = { -1.0f, -3.0f, 0.0f, 1.0f, 4.2f, 3.9f, -33.0f, 0.003f, 14.0f, 0.0f, 0.0f, 22.0f };
         auto v2 = linalg::VectorPtr<float, 3uz, -3z>{ reallyLongArray + 8uz };
         //                          type   size stride  parent        offset
 
         // Pointer types
-        cout << STR_EVAL(v2) << "\t<- a 'pointer-type' vector that doesn't own.\nreallyLongArray=";
+        std::cout << STR_EVAL(v2) << "\t<- a 'pointer-type' vector that doesn't own.\nreallyLongArray=";
         for (const auto &e : reallyLongArray)
-            cout << " " << e;
-        cout << endl;
+            std::cout << " " << e;
+        std::cout << std::endl;
 
         for (auto &e : v2)
             ++e;
 
-        cout << "incremented v2's elements.\nreallyLongArray=";
+        std::cout << "incremented v2's elements.\nreallyLongArray=";
         for (const auto &e : reallyLongArray)
-            cout << " " << e;
-        cout << endl;
+            std::cout << " " << e;
+        std::cout << std::endl;
 
         // Utilities showcase
         v2 -= v1;
-        cout << "v2-=v1; " STR_EVAL(v2) << "\t" << STR_EVAL(v2*4u) << "\t" << STR_EVAL(v1 + v2) << "\t" STR_EVAL(v1.cross(v2)) << "\t" STR_EVAL(v1.direction()) << endl;
+        std::cout << "v2-=v1; " STR_EVAL(v2) << "\t" << STR_EVAL(v2*4u) << "\t" << STR_EVAL(v1 + v2) << "\t" STR_EVAL(v1.cross(v2)) << "\t" STR_EVAL(v1.direction()) << std::endl;
 
-        cout << STR_EVAL(v1.map([](double a){ return a > 0.0; }).reduce([](bool a, bool b){ return a && b; })) << endl;
+        std::cout << STR_EVAL(v1.map([](double a){ return a > 0.0; }).reduce([](bool a, bool b){ return a && b; })) << std::endl;
     }
 
     [[maybe_unused]] void testMatrices() {
@@ -48,22 +46,22 @@ namespace {
                                                       0.0f, 1.0f, 0.0f,
                                                       1.0f, 0.0f, 1.0f };
 
-        // cout << m1 << "\n" << endl;
-        // cout << m2 << "\n" << endl;
-        cout << LINE_EVAL(m1 * m2) << endl;
+        // std::cout << m1 << "\n" << std::endl;
+        // std::cout << m2 << "\n" << std::endl;
+        std::cout << LINE_EVAL(m1 * m2) << std::endl;
 
         static float reallyLongArray[] = { -1.0f, -3.0f, 0.0f, 1.0f, 4.2f, 3.9f, -33.0f, 0.003f, 14.0f, 0.0f, 0.0f, 22.0f };
         [[maybe_unused]]
         constexpr auto m3 = linalg::MatrixPtr<float, 2uz, 3uz, -2>{ reallyLongArray + 10uz };
-        cout << LINE_EVAL(m3) << endl;
+        std::cout << LINE_EVAL(m3) << std::endl;
 
-        cout << STR_EVAL(m3['*', 2][1]) << endl;
+        std::cout << STR_EVAL(m3['*', 2][1]) << std::endl;
 
-        auto m4 = linalg::Matrix<unsigned, 5uz, 5uz>::Identity();
-        m4.getRow(3uz) += linalg::Vector<uint32_t, 5uz>::broadcast(4u);
+        auto m4 = linalg::Matrix<std::uint32_t, 5uz, 5uz>::Identity();
+        m4.getRow(3uz) += linalg::Vector<std::uint32_t, 5uz>::broadcast(4u);
         m4.getRow(0uz) = m4.getCol(4uz);
         m4.getDiagonal() *= 3u;
-        cout << LINE_EVAL(m4) << endl;
+        std::cout << LINE_EVAL(m4) << std::endl;
     }
 
     [[maybe_unused]] void testHigherDims() {
@@ -150,19 +148,19 @@ namespace {
                             {213,214,215}}}}}}
         };
 
-        cout << STR_EVAL(sizeof(h1)) << " bytes\n" STR_EVAL(h1.count()) << "\n" LINE_EVAL(h1) << "\n" << endl;
+        std::cout << STR_EVAL(sizeof(h1)) << " bytes\n" STR_EVAL(h1.count()) << "\n" LINE_EVAL(h1) << "\n" << std::endl;
 
-        cout << LINE_EVAL(h1[0, '*', 1, 0]) << endl;
-        cout << "Incrementing all values in slice 'h1[0, '*', 1, 0]'" << endl;
+        std::cout << LINE_EVAL(h1[0, '*', 1, 0]) << std::endl;
+        std::cout << "Incrementing all values in slice 'h1[0, '*', 1, 0]'" << std::endl;
         for (auto &elem : h1[0, '*', 1, 0])
             ++elem;
-        cout << LINE_EVAL(h1[0, '*', 1, 0]) << "\n" << endl;
+        std::cout << LINE_EVAL(h1[0, '*', 1, 0]) << "\n" << std::endl;
 
-        cout << STR_EVAL(++h1[0, 2, 1, 0, 0, 1]) << endl;
-        cout << STR_EVAL(++h1[0][2, 1, 0][0, 1]) << endl;
-        cout << STR_EVAL(++h1[0][2][1][0][0][1]) << endl;
-        cout << STR_EVAL(++h1[0, '*', '*', 0, 0][2, 1, 1]) << endl;
-        cout << STR_EVAL(++h1['*', '*', '*', '*', '*', 1]['*', '*', '*', '*', 0]['*', '*', '*', 0]['*', '*', 1]['*', 2][0]) << endl;
+        std::cout << STR_EVAL(++h1[0, 2, 1, 0, 0, 1]) << std::endl;
+        std::cout << STR_EVAL(++h1[0][2, 1, 0][0, 1]) << std::endl;
+        std::cout << STR_EVAL(++h1[0][2][1][0][0][1]) << std::endl;
+        std::cout << STR_EVAL(++h1[0, '*', '*', 0, 0][2, 1, 1]) << std::endl;
+        std::cout << STR_EVAL(++h1['*', '*', '*', '*', '*', 1]['*', '*', '*', '*', 0]['*', '*', '*', 0]['*', '*', 1]['*', 2][0]) << std::endl;
 
         [[maybe_unused]]
         constexpr auto h2 = linalg::Multidimensional<double, 2uz, 2uz, 3uz, 4uz> {
@@ -183,7 +181,7 @@ namespace {
         [[maybe_unused]]
         constexpr auto h3 = linalg::Multidimensional<int, 4uz, 3uz, 2uz, 5uz>::broadcast(1);
 
-        //cout << LINE_EVAL(h2.contract<3uz>(h3)) << "\n" LINE_EVAL(h2.contract<2uz>(h3)) << endl;
+        //std::cout << LINE_EVAL(h2.contract<3uz>(h3)) << "\n" LINE_EVAL(h2.contract<2uz>(h3)) << std::endl;
 
         // Test for compile-time evaluation
         static_assert(h2['*', 1][0, '*', 2][2] > 0.0);
