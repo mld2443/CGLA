@@ -31,8 +31,8 @@ add_executable(${PROJECT_NAME})
 
 target_sources(${PROJECT_NAME}
     PRIVATE
-        linearAlgebra.cpp
+        src/linearAlgebra.cpp
 
     PRIVATE FILE_SET modules TYPE CXX_MODULES FILES
-        linalg.cppm
+        src/linalg.cppm
 )
