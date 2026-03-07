@@ -39,16 +39,18 @@ namespace {
 
     [[maybe_unused]] void testMatrices() {
         [[maybe_unused]]
-        constexpr linalg::Matrix<double, 2uz, 5uz>  m1 = { 1, 0, 1, 0, 1,
-                                                           0, 1, 0, 1, 0 };
-        // cout << m1 << "\n" << endl;
+        constexpr linalg::Matrix<double, 2uz, 5uz> m1{ 1.0, 0.0, 1.0, 0.0, 1.0,
+                                                       0.0, 1.0, 0.0, 1.0, 0.0 };
         [[maybe_unused]]
-        constexpr linalg::Matrix<float, 5uz, 3uz> m2 = { 1, 0, 1,
-                                                         0, 1, 0,
-                                                         1, 0, 1,
-                                                         0, 1, 0,
-                                                         1, 0, 1 };
+        constexpr linalg::Matrix<float, 5uz, 3uz> m2{ 1.0f, 0.0f, 1.0f,
+                                                      0.0f, 1.0f, 0.0f,
+                                                      1.0f, 0.0f, 1.0f,
+                                                      0.0f, 1.0f, 0.0f,
+                                                      1.0f, 0.0f, 1.0f };
+
+        // cout << m1 << "\n" << endl;
         // cout << m2 << "\n" << endl;
+        cout << LINE_EVAL(m1 * m2) << endl;
 
         static float reallyLongArray[] = { -1.0f, -3.0f, 0.0f, 1.0f, 4.2f, 3.9f, -33.0f, 0.003f, 14.0f, 0.0f, 0.0f, 22.0f };
         [[maybe_unused]]
@@ -57,14 +59,11 @@ namespace {
 
         cout << STR_EVAL(m3['*', 2][1]) << endl;
 
-        //constexpr auto m4 = m1 * m2;
-        cout << LINE_EVAL(m1 * m2) << endl;
-
-        auto m5 = linalg::Matrix<unsigned, 5uz, 5uz>::Identity();
-        m5.getRow(3uz) += linalg::Vector<uint32_t, 5uz>::broadcast(4u);
-        m5.getRow(0uz) = m5.getCol(4uz);
-        m5.getDiagonal() *= 3u;
-        cout << LINE_EVAL(m5) << endl;
+        auto m4 = linalg::Matrix<unsigned, 5uz, 5uz>::Identity();
+        m4.getRow(3uz) += linalg::Vector<uint32_t, 5uz>::broadcast(4u);
+        m4.getRow(0uz) = m4.getCol(4uz);
+        m4.getDiagonal() *= 3u;
+        cout << LINE_EVAL(m4) << endl;
     }
 
     [[maybe_unused]] void testHigherDims() {
@@ -188,20 +187,6 @@ namespace {
 
         // Test for compile-time evaluation
         static_assert(h2['*', 1][0, '*', 2][2] > 0.0);
-    }
-
-    // ugh, std::transform is such a terrible design pattern, takes flexible containers and transforms *in-place*!
-    template <typename FROM, template <typename> typename CONTAINER>
-    auto actuallyTransform(CONTAINER<FROM> from, const auto& transform) {
-        CONTAINER<decltype(transform(FROM()))> to;
-
-        if constexpr (requires{ to.reserve(0uz); })
-            to.reserve(from.size());
-
-        for (FROM &obj : from)
-            to.push_back(transform(obj));
-
-        return to;
     }
 }
 

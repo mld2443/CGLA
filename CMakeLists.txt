@@ -1,9 +1,34 @@
 cmake_minimum_required(VERSION 3.27)
-project(CGLA)
+
+set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD d0edc3af-4c50-42ea-a356-e2862fe7a444)
+
+project(CGLA LANGUAGES CXX)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    add_compile_options(
+        -Wall -Wextra -Wpedantic
+        -Wconversion -Wsign-conversion
+        #-Wno-missing-field-initializers
+        #-Wno-missing-braces
+    )
+elseif(MSVC)
+    add_compile_options(/W4 /permissive-)
+endif()
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic")
+set(CMAKE_CXX_SCAN_FOR_MODULES ON)
+set(CMAKE_CXX_MODULE_STD ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_executable(${PROJECT_NAME} linearAlgebra.cpp)
+add_executable(${PROJECT_NAME})
+
+# target_compile_definitions(${PROJECT_NAME} PUBLIC
+#     CXX_STANDARD 23
+#     CXX_STANDARD_REQUIRED True
+#     CXX_SCAN_FOR_MODULES ON
+#     CXX_MODULE_STD ON
+#     CXX_EXTENSIONS OFF
+# )
+
+target_sources(${PROJECT_NAME} PRIVATE linearAlgebra.cpp)

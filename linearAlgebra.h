@@ -1,39 +1,5 @@
 #pragma once
 
-#if !__cpp_constexpr
-#  error "this compiler does not support constexpr"
-#elif !__cpp_if_constexpr
-#  error "this compiler does not support constexpr if"
-#elif !__cpp_concepts
-#  error "this compiler does not support concepts"
-#elif !__cpp_decltype_auto
-#  error "this compiler does not support decltype auto"
-#elif !__cpp_return_type_deduction
-#  error "this compiler does not support return type deduction"
-#elif !__cpp_inheriting_constructors
-#  error "this compiler does not support inherited constructors"
-#elif !__cpp_lambdas
-#  error "this compiler does not support lambdas"
-#elif !__cpp_fold_expressions
-#  error "this compiler does not support fold expressions"
-#elif !__cpp_nontype_template_args
-#  error "this compiler does not support non-type templates"
-#elif !__cpp_size_t_suffix
-#  error "this compiler does not support size-type suffixes" //for some reason
-#elif !__cpp_return_type_deduction
-#  error "this compiler does not support return type deduction"
-#elif !__cpp_variadic_templates
-#  error "this compiler does not support variadic templates"
-#elif !__cpp_generic_lambdas
-#  error "this compiler does not support generic lambdas"
-#elif !__cpp_deduction_guides
-#  error "this compiler does not support template deduction guides"
-#elif !__cpp_explicit_this_parameter && !(defined(__clang__) && __clang_major__ >= 18) // clang doesn't define this feature test correctly?
-#  error "this compiler does not support explicit (deducing) this"
-#elif !__cpp_multidimensional_subscript
-#  error "this compiler does not support multidimensional subscript"
-#endif
-
 #include <cmath>       // sqrt
 #include <cstddef>     // size_t, ptrdiff_t
 #include <iostream>    // ostream
@@ -60,6 +26,20 @@ namespace util {
         auto&& larger = std::cmp_greater(std::forward<T1>(first), std::forward<T2>(second)) ? std::forward<T1>(first) : std::forward<T2>(second);
         if constexpr (sizeof...(rest)) return maximum(std::forward<decltype(larger)>(larger), std::forward<Ts>(rest)...);
         else                           return std::forward<decltype(larger)>(larger);
+    }
+
+    // ugh, std::transform is such a terrible design pattern, takes flexible containers and transforms *in-place*!
+    template <typename FROM, template <typename> typename CONTAINER>
+    auto actuallyTransform(CONTAINER<FROM> from, const auto& transform) {
+        CONTAINER<decltype(transform(FROM()))> to;
+
+        if constexpr (requires{ to.reserve(0uz); })
+            to.reserve(from.size());
+
+        for (FROM &obj : from)
+            to.push_back(transform(obj));
+
+        return to;
     }
 }
 

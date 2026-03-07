@@ -18,7 +18,7 @@ Linear Algebra in C/C++ is often messy, verbose, cluttered, and/or opaque. Inspi
 // start with identity in row-major matrix
 auto matrix = linalg::Matrix<unsigned, 5uz, 5uz>::Identity();
 
-// Add a the vector [3 3 3 3 3] to row [3]
+// Add the vector [3 3 3 3 3] to row [3]
 matrix[3uz] += linalg::Vector<unsigned, 5uz>::broadcast(3u);
 
 // Set the values of row [0] to the values of column [4]
