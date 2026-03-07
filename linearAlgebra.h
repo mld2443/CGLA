@@ -38,8 +38,7 @@
 #include <cstddef>     // size_t, ptrdiff_t
 #include <iostream>    // ostream
 #include <type_traits> // conditional_t, is_const_v, is_same_v, remove_reference_t
-#include <utility>     // forward, index_sequence, make_index_sequence
-#include <algorithm>   // min
+#include <utility>     // cmp_greater, cmp_less, forward, index_sequence, make_index_sequence
 
 // Helper macros to reduce clutter, undefined at end of file
 #define COPYCONST(T1, ...) std::conditional_t<std::is_const_v<std::remove_reference_t<T1>>, const __VA_ARGS__, __VA_ARGS__>
@@ -49,15 +48,18 @@
 namespace util {
     template <std::size_t...> class TList {};
 
-    constexpr auto minimum(const auto& first, const auto&... rest) {
-        if constexpr (sizeof...(rest))
-            return [&](this auto minimumImpl, const auto& first, const auto& second, const auto&... rest) constexpr {
-                auto smaller = (first < second) ? first : second;
-                if constexpr (sizeof...(rest)) return minimumImpl(smaller, rest...);
-                else                           return smaller;
-            }(first, rest...);
-        else
-            return first;
+    template <typename T1, typename T2, typename... Ts>
+    constexpr auto minimum(T1&& first, T2&& second, Ts&&... rest) {
+        auto&& smaller = std::cmp_less(std::forward<T1>(first), std::forward<T2>(second)) ? std::forward<T1>(first) : std::forward<T2>(second);
+        if constexpr (sizeof...(rest)) return minimum(std::forward<decltype(smaller)>(smaller), std::forward<Ts>(rest)...);
+        else                           return std::forward<decltype(smaller)>(smaller);
+    }
+
+    template <typename T1, typename T2, typename... Ts>
+    constexpr auto maximum(T1&& first, T2&& second, Ts&&... rest) {
+        auto&& larger = std::cmp_greater(std::forward<T1>(first), std::forward<T2>(second)) ? std::forward<T1>(first) : std::forward<T2>(second);
+        if constexpr (sizeof...(rest)) return maximum(std::forward<decltype(larger)>(larger), std::forward<Ts>(rest)...);
+        else                           return std::forward<decltype(larger)>(larger);
     }
 }
 
@@ -161,7 +163,7 @@ namespace linalg {
         constexpr RecursiveValueClass(SEQUENCE(IDX...), NestedArray* first) : data{ first[IDX]... } {}
 
     protected:
-        constexpr RecursiveValueClass(NestedArray&& first) : RecursiveValueClass<T, COUNT>(MAKESEQUENCE(COUNT), &first) {}
+        constexpr RecursiveValueClass(NestedArray&& first) : RecursiveValueClass(MAKESEQUENCE(COUNT), &first) {}
         constexpr RecursiveValueClass(auto&&... payload) : data{ std::forward<T>(payload)... } {}
 
         T data[COUNT];
@@ -324,21 +326,21 @@ namespace linalg {
         }
 
         // Member operator overloads
-        constexpr auto operator-(                      ) const { return map([  ](const T& e){ return    -e; }); }
-        constexpr auto operator*(const nonArray auto& s) const { return map([&s](const T& e){ return e * s; }); }
-        constexpr auto operator/(const nonArray auto& s) const { return map([&s](const T& e){ return e / s; }); }
-        constexpr auto operator+(const          auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 + e2; }, t); }
-        constexpr auto operator-(const          auto& t) const { return binaryMap([](const T& e1, const auto& e2){ return e1 - e2; }, t); }
+        constexpr auto operator-(                      ) const { return map([  ](const T& e) constexpr { return    -e; }); }
+        constexpr auto operator*(const nonArray auto& s) const { return map([&s](const T& e) constexpr { return e * s; }); }
+        constexpr auto operator/(const nonArray auto& s) const { return map([&s](const T& e) constexpr { return e / s; }); }
+        constexpr auto operator+(const          auto& t) const { return binaryMap([](const T& e1, const auto& e2) constexpr { return e1 + e2; }, t); }
+        constexpr auto operator-(const          auto& t) const { return binaryMap([](const T& e1, const auto& e2) constexpr { return e1 - e2; }, t); }
 
         // Mutating operators
-        inline auto& operator*=(const nonArray auto& s) { mapWrite([&s](T& e){ e *= s; }); return *this; }
-        inline auto& operator/=(const nonArray auto& s) { mapWrite([&s](T& e){ e /= s; }); return *this; }
-        inline auto& operator+=(const          auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 += e2; }, t); return *this; }
-        inline auto& operator-=(const          auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 -= e2; }, t); return *this; }
-        inline auto& operator= (const          auto& t) { binaryMapWrite([](T& e1, const auto& e2){ e1 =  e2; }, t); return *this; }
+        inline auto& operator*=(const nonArray auto& s) { mapWrite([&s](T& e) constexpr { e *= s; }); return *this; }
+        inline auto& operator/=(const nonArray auto& s) { mapWrite([&s](T& e) constexpr { e /= s; }); return *this; }
+        inline auto& operator+=(const          auto& t) { binaryMapWrite([](T& e1, const auto& e2) constexpr { e1 += e2; }, t); return *this; }
+        inline auto& operator-=(const          auto& t) { binaryMapWrite([](T& e1, const auto& e2) constexpr { e1 -= e2; }, t); return *this; }
+        inline auto& operator= (const          auto& t) { binaryMapWrite([](T& e1, const auto& e2) constexpr { e1 =  e2; }, t); return *this; }
 
         template <std::size_t CONTRACTIONS, class OtherClass, typename T2, std::size_t... DIMS2> requires(CONTRACTIONS > 0uz)
-        constexpr auto contract(this const MultidimType<StorageClass, T, DIMS...>& , const MultidimType<OtherClass, T2, DIMS2...>& ) requires([](std::size_t (&&d1)[sizeof...(DIMS)], std::size_t (&&d2)[sizeof...(DIMS2)]){
+        constexpr auto contract(this const MultidimType<StorageClass, T, DIMS...>& , const MultidimType<OtherClass, T2, DIMS2...>& ) requires([](std::size_t (&&d1)[sizeof...(DIMS)], std::size_t (&&d2)[sizeof...(DIMS2)]) constexpr {
             for (std::size_t i = 0uz; i < CONTRACTIONS; ++i)
                 if (d1[sizeof...(DIMS) - 1uz - i] != d2[i])
                     return false;
@@ -402,10 +404,7 @@ namespace linalg {
 
         template <class Self>
         constexpr decltype(auto) getDiagonal(this Self& self) requires(std::remove_cvref_t<Self>::order() > 1uz) {
-            constexpr std::size_t SMALLEST = []<std::size_t D0, std::size_t D1, std::size_t... REST>(this auto minimum) constexpr {
-                if constexpr (sizeof...(REST)) return minimum.template operator()<std::min(D0, D1), REST...>();
-                else                           return std::min(D0, D1);
-            }.template operator()<DIMS...>();
+            constexpr std::size_t SMALLEST = util::minimum(DIMS...);
             constexpr std::size_t STRIDE = []<std::size_t PRODUCT, std::size_t, std::size_t... REST>(this auto calcStride) constexpr {
                 if constexpr (sizeof...(REST)) return calcStride.template operator()<PRODUCT + (REST * ...), REST...>();
                 else                           return PRODUCT;
@@ -419,7 +418,7 @@ namespace linalg {
         ////////////////////////////
 
         constexpr auto dot(this const isVector auto& self, const isVector auto& v) requires(COUNT == std::remove_cvref_t<decltype(v)>::COUNT) {
-            return self.binaryMap([](const auto& a, const auto& b){ return a * b; }, v).reduce([](const auto& a, const auto& b){ return a + b; });
+            return self.binaryMap([](const auto& a, const auto& b) constexpr { return a * b; }, v).reduce([](const auto& a, const auto& b) constexpr { return a + b; });
         }
         constexpr T magnitudeSqr(this const isVector auto& self) { return self.dot(self);                 }
         constexpr T    magnitude(this const isVector auto& self) { return std::sqrt(self.magnitudeSqr()); }
