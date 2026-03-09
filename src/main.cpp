@@ -67,7 +67,7 @@ namespace {
     [[maybe_unused]] void testHigherDims() {
         // Massive 6-dimensional matrix, uses CTAD to deduce template of <ValueType<...>, int, 2, 3, 2, 3, 2, 3>
         [[maybe_unused]]
-        linalg::Multidimensional h1{
+        linalg::Tensor h1{
         { { { { { {  0,  1,  2},
                   {  3,  4,  5} },
                     { {  6,  7,  8},
@@ -163,7 +163,7 @@ namespace {
         std::cout << STR_EVAL(++h1['*', '*', '*', '*', '*', 1]['*', '*', '*', '*', 0]['*', '*', '*', 0]['*', '*', 1]['*', 2][0]) << std::endl;
 
         [[maybe_unused]]
-        constexpr linalg::Multidimensional<double, 2uz, 2uz, 3uz, 4uz> h2 {
+        constexpr linalg::Tensor<double, 2uz, 2uz, 3uz, 4uz> h2 {
             0,  1,  2,  3,
             4,  5,  6,  7,
             8,  9, 10, 11,
@@ -179,7 +179,7 @@ namespace {
         };
 
         [[maybe_unused]]
-        constexpr auto h3 = linalg::Multidimensional<int, 4uz, 3uz, 2uz, 5uz>::broadcast(1);
+        constexpr auto h3 = linalg::Tensor<int, 4uz, 3uz, 2uz, 5uz>::broadcast(1);
 
         //std::cout << LINE_EVAL(h2.contract<3uz>(h3)) << "\n" LINE_EVAL(h2.contract<2uz>(h3)) << std::endl;
 

@@ -25,10 +25,13 @@ add_executable(${PROJECT_NAME})
 
 target_sources(${PROJECT_NAME}
     PRIVATE
-        src/linearAlgebra.cpp
+        src/main.cpp
 
     PRIVATE FILE_SET modules TYPE CXX_MODULES FILES
-        src/linalg.cppm
-        src/util.cppm
-        src/meta.cppm
+        src/util/common.cppm
+        src/util/meta.cppm
+        src/linalg/reference.cppm
+        src/linalg/pointer.cppm
+        src/linalg/value.cppm
+        src/linalg/tensor.cppm
 )

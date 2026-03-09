@@ -4,9 +4,6 @@ import std;
 
 export namespace util {
     template <typename T1, typename T2>
-    using copyConst = std::conditional_t<std::is_const_v<std::remove_reference_t<T1>>, const T2, T2>;
-
-    template <typename T1, typename T2>
     constexpr auto cmpLess(T1&& first, T2&& second) {
         if constexpr (requires{ std::is_integral_v<T1> && std::is_integral_v<T2>; })
             return std::cmp_less(std::forward<T1>(first), std::forward<T2>(second)) ? std::forward<T1>(first) : std::forward<T2>(second);

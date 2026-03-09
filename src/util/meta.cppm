@@ -16,6 +16,9 @@ import std;
 
 
 export namespace meta {
+    template <typename T1, typename T2>
+    using copyConst = std::conditional_t<std::is_const_v<std::remove_reference_t<T1>>, const T2, T2>;
+
     template <auto...>
     class List {};
 

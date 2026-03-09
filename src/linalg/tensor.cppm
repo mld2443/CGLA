@@ -5,6 +5,15 @@ import std;
 import util;
 import meta;
 
+/////////////////////
+// STORAGE CLASSES //
+/////////////////////
+
+export import :reference;
+export import :pointer;
+export import :value;
+
+
 // Helper macros to reduce clutter
 #if defined(__GNUC__) || defined(__clang__)
 #define DISABLE_UNUSED_WARNING _Pragma("GCC diagnostic push") _Pragma("GCC diagnostic ignored \"-Wunused-value\"")
@@ -18,181 +27,62 @@ import meta;
 #endif
 
 export namespace linalg {
-    template <class STORAGEBASE, typename T, std::size_t... DIMS>
-    struct MultidimType;
-
-    /////////////////////
-    // STORAGE CLASSES //
-    /////////////////////
-
-    // Reference class, transient and transparent
-    template <class PARENTCLASS, std::size_t C, std::size_t... DIMSANDSTEPS>
-    struct ReferenceClass {
-    protected:
-        static constexpr std::size_t COUNT = C;
-        static constexpr bool ISREF = true;
-
-        constexpr decltype(auto) get(this auto& self, std::size_t i) {
-            return self.ref.get([]<std::size_t LASTSTEP, std::size_t DIM, std::size_t MYSTEP, std::size_t... REMAINS>(this auto translateIndex, std::size_t i, std::size_t accum) constexpr {
-                constexpr std::size_t THISSTEP = LASTSTEP / DIM;
-                if constexpr (sizeof...(REMAINS) / 2uz)
-                    return translateIndex.template operator()<THISSTEP, REMAINS...>(i % THISSTEP, accum + MYSTEP * (i / THISSTEP));
-                else
-                    return accum + MYSTEP * (i / THISSTEP);
-            }.template operator()<COUNT, DIMSANDSTEPS...>(i, self.offset));
-        }
-
-        template <class SELF>
-        constexpr decltype(auto) deref(this SELF&& self, auto first, auto... inds) {
-            return []<std::size_t THISDIM, std::size_t THISSTEP, std::size_t... RESTDIMSSTEPS, std::size_t... NEWDIMSANDSTEPS, std::size_t... NEWDIMS>(
-                        this auto getSubstruct, SELF&& self,
-                        meta::List<NEWDIMSANDSTEPS...>&&, meta::List<NEWDIMS...>&&,
-                        std::size_t offset, auto nextInd, auto... restInds) constexpr -> decltype(auto) {
-                if constexpr (std::is_same_v<decltype(nextInd), char>) { // nextInd is a wildcard
-                    if constexpr (sizeof...(restInds))             // more given indices after this wildcard
-                        return getSubstruct.template operator()<RESTDIMSSTEPS...>(std::forward<SELF>(self), meta::List<NEWDIMSANDSTEPS..., THISDIM, THISSTEP>{}, meta::List<NEWDIMS..., THISDIM>{}, offset, restInds...);
-                    else if constexpr (sizeof...(RESTDIMSSTEPS))   // remaining dimensions are implied wildcards
-                        return getSubstruct.template operator()<RESTDIMSSTEPS...>(std::forward<SELF>(self), meta::List<NEWDIMSANDSTEPS..., THISDIM, THISSTEP>{}, meta::List<NEWDIMS..., THISDIM>{}, offset, '*');
-                    else                                           // final index was given or implied wildcard
-                        return MultidimType<ReferenceClass<PARENTCLASS, (NEWDIMS * ... * THISDIM), NEWDIMSANDSTEPS..., THISDIM, 1uz>, util::copyConst<SELF, std::remove_cvref_t<decltype(*self.ref.data)>>, NEWDIMS..., THISDIM>(self.ref, offset);
-                } else {
-                    offset += THISSTEP * static_cast<std::size_t>(nextInd);
-                    if constexpr (sizeof...(restInds))             // more constraints to get through and/or there are unconstrained dimensions
-                        return getSubstruct.template operator()<RESTDIMSSTEPS...>(std::forward<SELF>(self), meta::List<NEWDIMSANDSTEPS...>{}, meta::List<NEWDIMS...>{}, offset, restInds...);
-                    else if constexpr (sizeof...(RESTDIMSSTEPS))   // remaining dimensions are implied wildcards
-                        return getSubstruct.template operator()<RESTDIMSSTEPS...>(std::forward<SELF>(self), meta::List<NEWDIMSANDSTEPS...>{}, meta::List<NEWDIMS...>{}, offset, '*');
-                    else if constexpr (sizeof...(NEWDIMSANDSTEPS)) // all indices were given but at least one was a wildcard
-                        return MultidimType<ReferenceClass<PARENTCLASS, (NEWDIMS * ...), NEWDIMSANDSTEPS...>, util::copyConst<SELF, std::remove_cvref_t<decltype(*self.ref.data)>>, NEWDIMS...>(self.ref, offset);
-                    else                                           // all indices given, no wildcards
-                        return self.ref.get(offset);
-                }
-            }.template operator()<DIMSANDSTEPS...>(std::forward<SELF>(self), {}, {}, self.offset, first, inds...);
-        }
-
-    public:
-        constexpr ReferenceClass(PARENTCLASS& ref, std::size_t offset) : ref(ref), offset(offset) {}
-
-    protected:
-        PARENTCLASS& ref;
-        std::size_t offset;
-    };
-
-    // Simple pointer type, takes user-supplied pointer and optional stride
-    template <typename T, std::size_t C, std::ptrdiff_t STRIDE = 1z>
-    struct PointerClass {
-    protected:
-        static constexpr std::size_t COUNT = C;
-        static constexpr bool ISREF = false;
-
-        constexpr decltype(auto) get(this auto&& self, std::size_t i) { return *(self.data + static_cast<std::ptrdiff_t>(i) * STRIDE); }
-
-    public:
-        constexpr PointerClass(T* origin) : data(origin) {}
-
-    protected:
-        T* data;
-    };
-
-    // Value type recursive primary template
-    template <typename T, std::size_t COUNT, std::size_t DIM = 0uz, std::size_t... REST>
-    class RecursiveValueClass : RecursiveValueClass<T, COUNT, REST...> {
-        using Base = RecursiveValueClass<T, COUNT, REST...>;
-    protected:
-        using NestedArray = typename Base::NestedArray[DIM];
-        using Base::data;
-
-    public:
-        constexpr RecursiveValueClass(NestedArray&& payload) : Base(std::forward<typename Base::NestedArray>(*payload)) {}
-        constexpr RecursiveValueClass(auto&&... payload) : Base(std::forward<T>(payload)...) {}
-    };
-
-    // Value type recursive base-case class partial template specialization
-    template <typename T, std::size_t COUNT>
-    class RecursiveValueClass<T, COUNT> {
-    protected:
-        using NestedArray = T;
-
-    private:
-        template <std::size_t... IDX>
-        constexpr RecursiveValueClass(meta::List<IDX...>&&, NestedArray* first) : data{ first[IDX]... } {}
-
-    protected:
-        constexpr RecursiveValueClass(NestedArray&& first) : RecursiveValueClass(meta::sequenceList<COUNT>(), &first) {}
-        constexpr RecursiveValueClass(auto&&... payload) : data{ std::forward<T>(payload)... } {}
-
-        T data[COUNT];
-    };
-
-    // Top-level Value-type class
-    template <typename T, std::size_t... DIMS>
-    struct ValueClass : RecursiveValueClass<T, (DIMS * ... * 1uz), DIMS...> {
-    protected:
-        static constexpr std::size_t COUNT = (DIMS * ... * 1uz);
-        static constexpr bool ISREF = false;
-    private:
-        using Base = RecursiveValueClass<T, COUNT, DIMS...>;
-
-    protected:
-        using Base::Base;
-        using Base::data;
-
-        constexpr decltype(auto) get(this auto&& self, std::size_t i) { return *(self.data + i); }
-    };
-
     //////////////////////
     // Multidimensional //
     //////////////////////
+    template <class STORAGEBASE, typename T, std::size_t... DIMS>
+    struct TensorType;
 
     // Convenience aliases
     template <typename T, std::size_t... DIMS>
-    using Multidimensional = MultidimType<ValueClass<T, DIMS...>, T, DIMS...>;
+    using Tensor = TensorType<ValueClass<T, DIMS...>, T, DIMS...>;
     template <typename T, std::size_t M, std::size_t N, class StorageType = ValueClass<T, M, N>>
-    using Matrix = MultidimType<StorageType, T, M, N>;
+    using Matrix = TensorType<StorageType, T, M, N>;
     template <typename T, std::size_t M, std::size_t N, std::ptrdiff_t STRIDE = 1z>
-    using MatrixPtr = MultidimType<PointerClass<T, M * N, STRIDE>, T, M, N>;
+    using MatrixPtr = TensorType<PointerClass<T, M * N, STRIDE>, T, M, N>;
     template <typename T, std::size_t N, class StorageType = ValueClass<T, N>>
-    using Vector = MultidimType<StorageType, T, N>;
+    using Vector = TensorType<StorageType, T, N>;
     template <typename T, std::size_t N, std::ptrdiff_t STRIDE = 1z>
-    using VectorPtr = MultidimType<PointerClass<T, N, STRIDE>, T, N>;
+    using VectorPtr = TensorType<PointerClass<T, N, STRIDE>, T, N>;
 
     // Concepts for dimension-dependant specializations
     template <class C> concept isVector = requires { C::order(); } && C::order() == 1uz;
     template <class C> concept isMatrix = requires { C::order(); } && C::order() == 2uz;
-    template <class C> concept nonArray = !requires(C** x) { []<class S, class T, std::size_t... DIMS>(MultidimType<S, T, DIMS...>**){}(x); };
-    template <class C, typename T, std::size_t... DIMS> concept isMultidim = requires(C** x) { []<class Storage>(MultidimType<Storage, T, DIMS...>**){}(x); };
+    template <class C> concept nonArray = !requires(C** x) { []<class S, class T, std::size_t... DIMS>(TensorType<S, T, DIMS...>**){}(x); };
+    template <class C, typename T, std::size_t... DIMS> concept isMultidim = requires(C** x) { []<class Storage>(TensorType<Storage, T, DIMS...>**){}(x); };
 
     // Deduction guides for value-initialization
     // Anything higher than 10-dimensional can still be value-initialized, but template params must be explicit
     template <typename T, std::size_t D0>
-    MultidimType(T (&&)[D0]) -> MultidimType<ValueClass<T, D0>, T, D0>;
+    TensorType(T (&&)[D0]) -> TensorType<ValueClass<T, D0>, T, D0>;
     template <typename T, std::size_t D0, std::size_t D1>
-    MultidimType(T (&&)[D0][D1]) -> MultidimType<ValueClass<T, D0, D1>, T, D0, D1>;
+    TensorType(T (&&)[D0][D1]) -> TensorType<ValueClass<T, D0, D1>, T, D0, D1>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2>
-    MultidimType(T (&&)[D0][D1][D2]) -> MultidimType<ValueClass<T, D0, D1, D2>, T, D0, D1, D2>;
+    TensorType(T (&&)[D0][D1][D2]) -> TensorType<ValueClass<T, D0, D1, D2>, T, D0, D1, D2>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3>
-    MultidimType(T (&&)[D0][D1][D2][D3]) -> MultidimType<ValueClass<T, D0, D1, D2, D3>, T, D0, D1, D2, D3>;
+    TensorType(T (&&)[D0][D1][D2][D3]) -> TensorType<ValueClass<T, D0, D1, D2, D3>, T, D0, D1, D2, D3>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3, std::size_t D4>
-    MultidimType(T (&&)[D0][D1][D2][D3][D4]) -> MultidimType<ValueClass<T, D0, D1, D2, D3, D4>, T, D0, D1, D2, D3, D4>;
+    TensorType(T (&&)[D0][D1][D2][D3][D4]) -> TensorType<ValueClass<T, D0, D1, D2, D3, D4>, T, D0, D1, D2, D3, D4>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3, std::size_t D4, std::size_t D5>
-    MultidimType(T (&&)[D0][D1][D2][D3][D4][D5]) -> MultidimType<ValueClass<T, D0, D1, D2, D3, D4, D5>, T, D0, D1, D2, D3, D4, D5>;
+    TensorType(T (&&)[D0][D1][D2][D3][D4][D5]) -> TensorType<ValueClass<T, D0, D1, D2, D3, D4, D5>, T, D0, D1, D2, D3, D4, D5>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3, std::size_t D4, std::size_t D5, std::size_t D6>
-    MultidimType(T (&&)[D0][D1][D2][D3][D4][D5][D6]) -> MultidimType<ValueClass<T, D0, D1, D2, D3, D4, D5, D6>, T, D0, D1, D2, D3, D4, D5, D6>;
+    TensorType(T (&&)[D0][D1][D2][D3][D4][D5][D6]) -> TensorType<ValueClass<T, D0, D1, D2, D3, D4, D5, D6>, T, D0, D1, D2, D3, D4, D5, D6>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3, std::size_t D4, std::size_t D5, std::size_t D6, std::size_t D7>
-    MultidimType(T (&&)[D0][D1][D2][D3][D4][D5][D6][D7]) -> MultidimType<ValueClass<T, D0, D1, D2, D3, D4, D5, D6, D7>, T, D0, D1, D2, D3, D4, D5, D6, D7>;
+    TensorType(T (&&)[D0][D1][D2][D3][D4][D5][D6][D7]) -> TensorType<ValueClass<T, D0, D1, D2, D3, D4, D5, D6, D7>, T, D0, D1, D2, D3, D4, D5, D6, D7>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3, std::size_t D4, std::size_t D5, std::size_t D6, std::size_t D7, std::size_t D8>
-    MultidimType(T (&&)[D0][D1][D2][D3][D4][D5][D6][D7][D8]) -> MultidimType<ValueClass<T, D0, D1, D2, D3, D4, D5, D6, D7, D8>, T, D0, D1, D2, D3, D4, D5, D6, D7, D8>;
+    TensorType(T (&&)[D0][D1][D2][D3][D4][D5][D6][D7][D8]) -> TensorType<ValueClass<T, D0, D1, D2, D3, D4, D5, D6, D7, D8>, T, D0, D1, D2, D3, D4, D5, D6, D7, D8>;
     template <typename T, std::size_t D0, std::size_t D1, std::size_t D2, std::size_t D3, std::size_t D4, std::size_t D5, std::size_t D6, std::size_t D7, std::size_t D8, std::size_t D9>
-    MultidimType(T (&&)[D0][D1][D2][D3][D4][D5][D6][D7][D8][D9]) -> MultidimType<ValueClass<T, D0, D1, D2, D3, D4, D5, D6, D7, D8, D9>, T, D0, D1, D2, D3, D4, D5, D6, D7, D8, D9>;
+    TensorType(T (&&)[D0][D1][D2][D3][D4][D5][D6][D7][D8][D9]) -> TensorType<ValueClass<T, D0, D1, D2, D3, D4, D5, D6, D7, D8, D9>, T, D0, D1, D2, D3, D4, D5, D6, D7, D8, D9>;
 
     template <class STORAGECLASS, typename T, std::size_t... DIMS>
-    struct MultidimType final : STORAGECLASS {
+    struct TensorType final : STORAGECLASS {
     private:
         template <class, std::size_t, std::size_t...>
         friend struct ReferenceClass; // Allows ReferenceType to use protected get()
         template <class, typename, std::size_t...>
-        friend struct MultidimType;   // Allows different instantiations to use protected get()
+        friend struct TensorType;   // Allows different instantiations to use protected get()
         template <class OTHERCLASS, typename T2, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
-        friend constexpr std::ostream& operator<<(std::ostream& os, const MultidimType<OTHERCLASS, T2, FIRSTDIM, RESTDIMS...>& t);
+        friend constexpr std::ostream& operator<<(std::ostream& os, const TensorType<OTHERCLASS, T2, FIRSTDIM, RESTDIMS...>& t);
         using STORAGECLASS::COUNT;
         using STORAGECLASS::get;      // Accessor addressing flat array of data, used internally to perform mappings and iterate
 
@@ -228,7 +118,7 @@ export namespace linalg {
         using STORAGECLASS::STORAGECLASS;
         static constexpr auto broadcast(T&& s) { return [&]<std::size_t... IDX>(meta::List<IDX...>&&) constexpr {
             DISABLE_UNUSED_WARNING
-            return MultidimType<STORAGECLASS, T, DIMS...>{ (IDX, s)... }; }(meta::sequenceList<COUNT>());
+            return TensorType<STORAGECLASS, T, DIMS...>{ (IDX, s)... }; }(meta::sequenceList<COUNT>());
             RESTORE_UNUSED_WARNING
         }
 
@@ -256,12 +146,12 @@ export namespace linalg {
         // Functional programming
         constexpr auto map(auto&& func) const {
             return [this]<std::size_t... IDX>(auto& func, meta::List<IDX...>&&) constexpr {
-                return Multidimensional<decltype(func(T())), DIMS...>{ func(get(IDX))... };
+                return Tensor<decltype(func(T())), DIMS...>{ func(get(IDX))... };
             }(func, meta::sequenceList<COUNT>());
         }
         constexpr auto binaryMap(auto&& func, const auto& t) const {
-            return [this]<class OTHERCLASS, typename T2, std::size_t... IDX>(auto& func, const MultidimType<OTHERCLASS, T2, DIMS...>& t, meta::List<IDX...>&&) constexpr {
-                return Multidimensional<decltype(func(T(), T2())), DIMS...>{ func(get(IDX), t.get(IDX))... };
+            return [this]<class OTHERCLASS, typename T2, std::size_t... IDX>(auto& func, const TensorType<OTHERCLASS, T2, DIMS...>& t, meta::List<IDX...>&&) constexpr {
+                return Tensor<decltype(func(T(), T2())), DIMS...>{ func(get(IDX), t.get(IDX))... };
             }(func, t, meta::sequenceList<COUNT>());
         }
         inline void mapWrite(auto&& func) {
@@ -270,7 +160,7 @@ export namespace linalg {
             }(func, meta::sequenceList<COUNT>());
         }
         inline void binaryMapWrite(auto&& func, const auto& t) {
-            [this]<class OTHERCLASS, typename T2, std::size_t... IDX>(auto& func, const MultidimType<OTHERCLASS, T2, DIMS...>& t, meta::List<IDX...>&&) constexpr {
+            [this]<class OTHERCLASS, typename T2, std::size_t... IDX>(auto& func, const TensorType<OTHERCLASS, T2, DIMS...>& t, meta::List<IDX...>&&) constexpr {
                 (func(get(IDX), t.get(IDX)), ...);
             }(func, t, meta::sequenceList<COUNT>());
         }
@@ -303,7 +193,7 @@ export namespace linalg {
         inline auto& operator= (const          auto& t) { binaryMapWrite([](T& e1, const auto& e2) constexpr { e1 =  e2; }, t); return *this; }
 
         template <std::size_t CONTRACTIONS, class OTHERCLASS, typename T2, std::size_t... DIMS2> requires(CONTRACTIONS > 0uz)
-        constexpr auto contract(this const MultidimType<STORAGECLASS, T, DIMS...>& , const MultidimType<OTHERCLASS, T2, DIMS2...>& ) requires([](std::size_t (&&d1)[sizeof...(DIMS)], std::size_t (&&d2)[sizeof...(DIMS2)]) constexpr {
+        constexpr auto contract(this const TensorType<STORAGECLASS, T, DIMS...>& , const TensorType<OTHERCLASS, T2, DIMS2...>& ) requires([](std::size_t (&&d1)[sizeof...(DIMS)], std::size_t (&&d2)[sizeof...(DIMS2)]) constexpr {
             for (std::size_t i = 0uz; i < CONTRACTIONS; ++i)
                 if (d1[sizeof...(DIMS) - 1uz - i] != d2[i])
                     return false;
@@ -316,7 +206,7 @@ export namespace linalg {
                 else if constexpr (sizeof...(D2_REST) + CONTRACTIONS > sizeof...(DIMS2))    // Drop dimensions off front of DIMS2 until all contracted dims are gone
                     return buildDims(meta::List<D1_FIRST, D1_REST...>{}, meta::List<D2_REST...>{}, meta::List<FRONTDIMS...>{});
                 else {
-                    using ReturnType = Multidimensional<decltype(T() * T2()), FRONTDIMS..., D2_REST...>;
+                    using ReturnType = Tensor<decltype(T() * T2()), FRONTDIMS..., D2_REST...>;
 
                     return ReturnType{};
                 }
@@ -350,7 +240,7 @@ export namespace linalg {
                         else if constexpr (sizeof...(RESTDIMS))     // remaining dimensions are implied wildcards
                             return getSubstruct.template operator()<THISSTEP, RESTDIMS...>(std::forward<SELF>(self), meta::List<DIMSANDSTEPS..., THISDIM, THISSTEP>{}, meta::List<NEWDIMS..., THISDIM>{}, offset, '*');
                         else                                        // final index was given as or implied to be a wildcard
-                            return MultidimType<ReferenceClass<SELF, (NEWDIMS * ... * THISDIM), DIMSANDSTEPS..., THISDIM, 1uz>, util::copyConst<SELF, T>, NEWDIMS..., THISDIM>(std::forward<SELF>(self), offset);
+                            return TensorType<ReferenceClass<SELF, (NEWDIMS * ... * THISDIM), DIMSANDSTEPS..., THISDIM, 1uz>, meta::copyConst<SELF, T>, NEWDIMS..., THISDIM>(std::forward<SELF>(self), offset);
                     } else {
                         offset += THISSTEP * static_cast<std::size_t>(nextInd);
                         if constexpr (sizeof...(restInds))          // more constraints to get through and/or there are unconstrained dimensions
@@ -358,7 +248,7 @@ export namespace linalg {
                         else if constexpr (sizeof...(RESTDIMS))     // remaining dimensions are implied wildcards
                             return getSubstruct.template operator()<THISSTEP, RESTDIMS...>(std::forward<SELF>(self), meta::List<DIMSANDSTEPS...>{}, meta::List<NEWDIMS...>{}, offset, '*');
                         else if constexpr (sizeof...(DIMSANDSTEPS)) // all indices were given but at least one was a wildcard
-                            return MultidimType<ReferenceClass<SELF, (NEWDIMS * ...), DIMSANDSTEPS...>, util::copyConst<SELF, T>, NEWDIMS...>(std::forward<SELF>(self), offset);
+                            return TensorType<ReferenceClass<SELF, (NEWDIMS * ...), DIMSANDSTEPS...>, meta::copyConst<SELF, T>, NEWDIMS...>(std::forward<SELF>(self), offset);
                         else                                        // all indices given, no wildcards
                             return self.get(offset);
                     }
@@ -373,7 +263,7 @@ export namespace linalg {
                 else                           return PRODUCT;
             }.template operator()<1uz, DIMS...>();
 
-            return MultidimType<ReferenceClass<SELF, SMALLEST, SMALLEST, STRIDE>, util::copyConst<SELF, T>, SMALLEST>{ self, 0uz };
+            return TensorType<ReferenceClass<SELF, SMALLEST, SMALLEST, STRIDE>, meta::copyConst<SELF, T>, SMALLEST>{ self, 0uz };
         }
 
         ////////////////////////////
@@ -426,11 +316,11 @@ export namespace linalg {
 
     // Right-side operator overloads
     template <class STORAGETYPE, typename T, std::size_t... DIMS>
-    constexpr auto operator*(const nonArray auto& s, const MultidimType<STORAGETYPE, T, DIMS...> &t) { return t.map([&s](const T& e) { return s * e; }); }
+    constexpr auto operator*(const nonArray auto& s, const TensorType<STORAGETYPE, T, DIMS...> &t) { return t.map([&s](const T& e) { return s * e; }); }
     template <class STORAGETYPE, typename T, std::size_t... DIMS>
-    constexpr auto operator/(const nonArray auto& s, const MultidimType<STORAGETYPE, T, DIMS...> &t) { return t.map([&s](const T& e) { return s / e; }); }
+    constexpr auto operator/(const nonArray auto& s, const TensorType<STORAGETYPE, T, DIMS...> &t) { return t.map([&s](const T& e) { return s / e; }); }
     template <class STORAGETYPE, typename T, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
-    constexpr std::ostream& operator<<(std::ostream& os, const MultidimType<STORAGETYPE, T, FIRSTDIM, RESTDIMS...>& t) {
+    constexpr std::ostream& operator<<(std::ostream& os, const TensorType<STORAGETYPE, T, FIRSTDIM, RESTDIMS...>& t) {
         t.template prettyPrint<(RESTDIMS * ... * 1uz), FIRSTDIM, RESTDIMS...>(os, meta::sequenceList<FIRSTDIM>());
         return os;
     }
