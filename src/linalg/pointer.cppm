@@ -2,9 +2,9 @@ export module linalg:pointer;
 
 import std;
 
-export namespace linalg {
+namespace linalg {
     // Simple pointer type, takes user-supplied pointer and optional stride
-    template <typename T, std::size_t C, std::ptrdiff_t STRIDE = 1z>
+    export template <typename T, std::size_t C, std::ptrdiff_t STRIDE = 1z>
     struct PointerClass {
     protected:
         static constexpr std::size_t COUNT = C;

@@ -8,11 +8,11 @@ import linalg;
 
 namespace {
     [[maybe_unused]] void testVectors() {
-        linalg::Vector v1{{ 1.0, 2.0, 3.0 }};
+        linalg::Vector v1{{ 1.0f, 2.0f, 3.0f }};
         std::cout << STR_EVAL(-v1) << "\t<- a 'value-type' vector that owns its data." << std::endl;
-        float reallyLongArray[] = { -1.0f, -3.0f, 0.0f, 1.0f, 4.2f, 3.9f, -33.0f, 0.003f, 14.0f, 0.0f, 0.0f, 22.0f };
-        linalg::VectorPtr<float, 3uz, -3z> v2{ reallyLongArray + 8uz };
-        //                          type   size stride  parent        offset
+        double reallyLongArray[] = { -1.0, -3.0, 0.0, 1.0, 4.2, 3.9, -33.0, 0.003, 14.0, 0.0, 0.0, 22.0 };
+        linalg::VectorPtr<double, 3uz, -3z> v2{ reallyLongArray + 8uz };
+        //                type   size stride   parent            offset
 
         // Pointer types
         std::cout << STR_EVAL(v2) << "\t<- a 'pointer-type' vector that doesn't own.\nreallyLongArray=";
@@ -30,7 +30,7 @@ namespace {
 
         // Utilities showcase
         v2 -= v1;
-        std::cout << "v2-=v1; " STR_EVAL(v2) << "\t" << STR_EVAL(v2*4u) << "\t" << STR_EVAL(v1 + v2) << "\t" STR_EVAL(v1.cross(v2)) << "\t" STR_EVAL(v1.direction()) << std::endl;
+        std::cout << "v2-=v1; " STR_EVAL(v2) << "\t" << STR_EVAL(v2*4.f) << "\t" << STR_EVAL(v1 + v2) << "\t" STR_EVAL(v1.cross(v2)) << "\t" STR_EVAL(v1.direction()) << std::endl;
 
         std::cout << STR_EVAL(v1.map([](double a){ return a > 0.0; }).reduce([](bool a, bool b){ return a && b; })) << std::endl;
     }
@@ -65,7 +65,7 @@ namespace {
     }
 
     [[maybe_unused]] void testHigherDims() {
-        // Massive 6-dimensional matrix, uses CTAD to deduce template of <ValueType<...>, int, 2, 3, 2, 3, 2, 3>
+        // Massive 6-dimensional tensor, uses CTAD to deduce template of <ValueType<...>, int, 2, 3, 2, 3, 2, 3>
         [[maybe_unused]]
         linalg::Tensor h1{
         { { { { { {  0,  1,  2},
@@ -87,12 +87,12 @@ namespace {
                       { 45, 46, 47} },
                         { { 48, 49, 50},
                           { 51, 52, 53} } },
-            { { { 54, 55, 56},
-                { 57, 58, 59} },
-                    { { 60, 61, 62},
-                      { 63, 64, 65} },
-                        { { 66, 67, 68},
-                          { 69, 70, 71} } } },
+              { { { 54, 55, 56},
+                  { 57, 58, 59} },
+                      { { 60, 61, 62},
+                        { 63, 64, 65} },
+                          { { 66, 67, 68},
+                            { 69, 70, 71} } } },
 
             { { { { 72, 73, 74},
                   { 75, 76, 77} },
@@ -100,12 +100,12 @@ namespace {
                       { 81, 82, 83} },
                         { { 84, 85, 86},
                           { 87, 88, 89} } },
-            { { { 90, 91, 92},
-                { 93, 94, 95} },
-                    { { 96, 97, 98},
-                      { 99,100,101} },
-                        { {102,103,104},
-                          {105,106,107} } } } },
+              { { { 90, 91, 92},
+                  { 93, 94, 95} },
+                      { { 96, 97, 98},
+                        { 99,100,101} },
+                          { {102,103,104},
+                            {105,106,107} } } } },
 
 
                 { { { { {108,109,110},

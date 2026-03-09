@@ -36,7 +36,7 @@ std::cout << matrix << std::endl;
 ```
 ```cpp
 // Value initialize and types/dimensions are automatic
-auto sixD = linalg::Multidimensional {
+auto sixD = linalg::Tensor {
   {  {  {  {  {  {
     // ...
     // massive 6-dimensional nested array of data
@@ -61,7 +61,7 @@ static_assert(sixD[0, '*', 1, '*', 0][2, 0, 1] > 0);
 
 ### Things it does not do
 
-1. Replace BLAS - use BLAS if performance is paramount, or the aforementioned C++26 \<linalg\> header once available
+1. Replace BLAS - use BLAS if runtime performance is paramount, or the aforementioned C++26 \<linalg\> header once available
 1. Utilize vector registers or specialty SIMD instructions
 1. Sparse data representation, modeling, or optimizations
 1. Capture every elementary operation for a vector/matrix/tensor... yet

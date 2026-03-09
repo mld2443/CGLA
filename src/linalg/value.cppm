@@ -4,7 +4,7 @@ import std;
 
 import meta;
 
-export namespace linalg {
+namespace linalg {
     // Value type recursive primary template
     template <typename T, std::size_t COUNT, std::size_t DIM = 0uz, std::size_t... REST>
     class RecursiveValueClass : RecursiveValueClass<T, COUNT, REST...> {
@@ -36,7 +36,7 @@ export namespace linalg {
     };
 
     // Top-level Value-type class
-    template <typename T, std::size_t... DIMS>
+    export template <typename T, std::size_t... DIMS>
     struct ValueClass : RecursiveValueClass<T, (DIMS * ... * 1uz), DIMS...> {
     protected:
         static constexpr std::size_t COUNT = (DIMS * ... * 1uz);

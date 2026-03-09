@@ -26,23 +26,20 @@ export import :value;
 #define RESTORE_UNUSED_WARNING
 #endif
 
-export namespace linalg {
-    //////////////////////
-    // Multidimensional //
-    //////////////////////
+namespace linalg {
     template <class STORAGEBASE, typename T, std::size_t... DIMS>
     struct TensorType;
 
     // Convenience aliases
-    template <typename T, std::size_t... DIMS>
+    export template <typename T, std::size_t... DIMS>
     using Tensor = TensorType<ValueClass<T, DIMS...>, T, DIMS...>;
-    template <typename T, std::size_t M, std::size_t N, class StorageType = ValueClass<T, M, N>>
+    export template <typename T, std::size_t M, std::size_t N, class StorageType = ValueClass<T, M, N>>
     using Matrix = TensorType<StorageType, T, M, N>;
-    template <typename T, std::size_t M, std::size_t N, std::ptrdiff_t STRIDE = 1z>
+    export template <typename T, std::size_t M, std::size_t N, std::ptrdiff_t STRIDE = 1z>
     using MatrixPtr = TensorType<PointerClass<T, M * N, STRIDE>, T, M, N>;
-    template <typename T, std::size_t N, class StorageType = ValueClass<T, N>>
+    export template <typename T, std::size_t N, class StorageType = ValueClass<T, N>>
     using Vector = TensorType<StorageType, T, N>;
-    template <typename T, std::size_t N, std::ptrdiff_t STRIDE = 1z>
+    export template <typename T, std::size_t N, std::ptrdiff_t STRIDE = 1z>
     using VectorPtr = TensorType<PointerClass<T, N, STRIDE>, T, N>;
 
     // Concepts for dimension-dependant specializations
@@ -80,7 +77,7 @@ export namespace linalg {
         template <class, std::size_t, std::size_t...>
         friend struct ReferenceClass; // Allows ReferenceType to use protected get()
         template <class, typename, std::size_t...>
-        friend struct TensorType;   // Allows different instantiations to use protected get()
+        friend struct TensorType;     // Allows different instantiations to use protected get()
         template <class OTHERCLASS, typename T2, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
         friend constexpr std::ostream& operator<<(std::ostream& os, const TensorType<OTHERCLASS, T2, FIRSTDIM, RESTDIMS...>& t);
         using STORAGECLASS::COUNT;

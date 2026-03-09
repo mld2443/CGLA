@@ -4,12 +4,12 @@ import std;
 
 import meta;
 
-export namespace linalg {
+namespace linalg {
     template <class STORAGEBASE, typename T, std::size_t... DIMS>
     struct TensorType;
 
     // Reference class, transient and transparent
-    template <class PARENTCLASS, std::size_t C, std::size_t... DIMSANDSTEPS>
+    export template <class PARENTCLASS, std::size_t C, std::size_t... DIMSANDSTEPS>
     struct ReferenceClass {
     protected:
         static constexpr std::size_t COUNT = C;
