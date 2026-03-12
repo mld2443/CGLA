@@ -1,6 +1,9 @@
+module;
+
+#include <cstddef> // ptrdiff_t, size_t
+
 export module linalg:pointer;
 
-import std;
 
 namespace linalg {
     // Simple pointer type, takes user-supplied pointer and optional stride

@@ -1,6 +1,4 @@
-cmake_minimum_required(VERSION 3.27)
-
-set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD d0edc3af-4c50-42ea-a356-e2862fe7a444)
+cmake_minimum_required(VERSION 4.0)
 
 project(CGLA LANGUAGES CXX)
 
@@ -17,7 +15,6 @@ endif()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
-set(CMAKE_CXX_MODULE_STD ON)
 
 add_executable(${PROJECT_NAME})
 

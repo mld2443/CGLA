@@ -1,6 +1,10 @@
-export module meta;
+module;
 
-import std;
+#include <cstddef>     // size_t
+#include <type_traits> // conditional_t, remove_reference_t
+#include <utility>     // forward, index_sequence, make_index_sequence
+
+export module meta;
 
 // Helper Macros for the unused warnings
 #if defined(__GNUC__) || defined(__clang__)
@@ -20,8 +24,8 @@ export namespace meta {
     template <typename T1, typename T2>
     using copyConst = std::conditional_t<std::is_const_v<std::remove_reference_t<T1>>, const T2, T2>;
 
-    template <auto...>
-    class List {};
+    template <auto... Xs>
+    struct List { static constexpr std::size_t COUNT = sizeof...(Xs); };
 
     template <char... Cs>
     struct String { static constexpr char STR[] = {Cs..., '\0'}; };

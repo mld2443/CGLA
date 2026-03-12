@@ -1,8 +1,13 @@
+module;
+
+#include <cstddef>     // size_t
+#include <type_traits> // remove_cvref_t
+#include <utility>     // forward
+
 export module linalg:reference;
 
-import std;
-
 import meta;
+
 
 namespace linalg {
     template <class STORAGEBASE, typename T, std::size_t... DIMS>

@@ -1,6 +1,10 @@
+module;
+
+#include <type_traits> // is_integral_v
+#include <utility>     // cmp_greater, cmp_less, forward
+
 export module util;
 
-import std;
 
 export namespace util {
     template <typename T1, typename T2>

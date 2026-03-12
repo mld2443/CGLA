@@ -1,6 +1,9 @@
-export module linalg:value;
+module;
 
-import std;
+#include <cstddef>     // size_t
+#include <utility>     // forward
+
+export module linalg:value;
 
 import meta;
 

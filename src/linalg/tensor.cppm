@@ -1,13 +1,15 @@
-export module linalg;
+module;
 
-import std;
+#include <cmath>       // sqrt
+#include <cstddef>     // ptrdiff_t, size_t
+#include <iostream>    // ostream
+#include <type_traits> // remove_cvref_t
+#include <utility>     // forward
+
+export module linalg;
 
 import util;
 import meta;
-
-/////////////////////
-// STORAGE CLASSES //
-/////////////////////
 
 export import :reference;
 export import :pointer;
@@ -115,9 +117,9 @@ namespace linalg {
         using STORAGECLASS::STORAGECLASS;
         static constexpr auto broadcast(T&& s) { return [&]<std::size_t... IDX>(meta::List<IDX...>&&) constexpr {
             DISABLE_UNUSED_WARNING
-            return TensorType<STORAGECLASS, T, DIMS...>{ (IDX, s)... }; }(meta::sequenceList<COUNT>());
+            return TensorType<STORAGECLASS, T, DIMS...>{ (IDX, s)... };
             RESTORE_UNUSED_WARNING
-        }
+        }(meta::sequenceList<COUNT>()); }
 
         // Iterator for for-each loops
         template <class QUALIFIEDTYPE>
@@ -139,6 +141,7 @@ namespace linalg {
         // Metadata
         static constexpr std::size_t count() { return COUNT; }
         static constexpr std::size_t order() { return sizeof...(DIMS); }
+        static constexpr auto shape() { return Vector{ { DIMS... } }; }
 
         // Functional programming
         constexpr auto map(auto&& func) const {
@@ -189,25 +192,26 @@ namespace linalg {
         inline auto& operator-=(const          auto& t) { binaryMapWrite([](T& e1, const auto& e2) constexpr { e1 -= e2; }, t); return *this; }
         inline auto& operator= (const          auto& t) { binaryMapWrite([](T& e1, const auto& e2) constexpr { e1 =  e2; }, t); return *this; }
 
-        template <std::size_t CONTRACTIONS, class OTHERCLASS, typename T2, std::size_t... DIMS2> requires(CONTRACTIONS > 0uz)
-        constexpr auto contract(this const TensorType<STORAGECLASS, T, DIMS...>& , const TensorType<OTHERCLASS, T2, DIMS2...>& ) requires([](std::size_t (&&d1)[sizeof...(DIMS)], std::size_t (&&d2)[sizeof...(DIMS2)]) constexpr {
-            for (std::size_t i = 0uz; i < CONTRACTIONS; ++i)
-                if (d1[sizeof...(DIMS) - 1uz - i] != d2[i])
-                    return false;
-            return true;
-        }({ DIMS... }, { DIMS2... })) {
-            return []<std::size_t D1_FIRST, std::size_t... D1_REST, std::size_t D2_FIRST, std::size_t... D2_REST, std::size_t... FRONTDIMS>(this auto buildDims,
-                        meta::List<D1_FIRST, D1_REST...>&&, meta::List<D2_FIRST, D2_REST...>&&, meta::List<FRONTDIMS...>&&) constexpr {
-                if constexpr (sizeof...(D1_REST) >= CONTRACTIONS)                            // Accept dimensions off front of DIMS until only contracted dims remain
-                    return buildDims(meta::List<D1_REST...>{}, meta::List<D2_FIRST, D2_REST...>{}, meta::List<FRONTDIMS..., D1_FIRST>{});
-                else if constexpr (sizeof...(D2_REST) + CONTRACTIONS > sizeof...(DIMS2))    // Drop dimensions off front of DIMS2 until all contracted dims are gone
-                    return buildDims(meta::List<D1_FIRST, D1_REST...>{}, meta::List<D2_REST...>{}, meta::List<FRONTDIMS...>{});
-                else {
-                    using ReturnType = Tensor<decltype(T() * T2()), FRONTDIMS..., D2_REST...>;
+        template <std::size_t CONTRACTIONS, class OTHERCLASS, typename T2, std::size_t... DIMS2> requires(
+            CONTRACTIONS > 0uz &&
+            CONTRACTIONS <= sizeof...(DIMS) &&
+            CONTRACTIONS <= sizeof...(DIMS2))
+        constexpr auto contract(this const TensorType<STORAGECLASS, T, DIMS...>&, const TensorType<OTHERCLASS, T2, DIMS2...>&)
+                //requires(std::ranges::equal(std::views::drop(lhs.shape(), lhs.order() - CONTRACTIONS), std::views::take(rhs.shape(), CONTRACTIONS)))
+        {
+            return []<std::size_t ROTATIONS, std::size_t D1_FIRST, std::size_t... D1_REST, std::size_t D2_FIRST, std::size_t... D2_REST>(
+                        this auto buildDims, meta::List<D1_FIRST, D1_REST...>&&, meta::List<D2_FIRST, D2_REST...>&&) constexpr {
+                if constexpr (ROTATIONS > 0uz) {                                             // Rotate first list until contracted dimensions are at the front
+                    return buildDims.template operator()<ROTATIONS - 1uz>(meta::List<D1_REST..., D1_FIRST>{}, meta::List<D2_FIRST, D2_REST...>{});
+                } else if constexpr (sizeof...(D2_REST) > sizeof...(DIMS2) - CONTRACTIONS) { // Drop front of both lists until all contracted dimensions are gone
+                    static_assert(D1_FIRST == D2_FIRST, "Contracted dimensions do not match!");
+                    return buildDims.template operator()<0uz>(meta::List<D1_REST...>{}, meta::List<D2_REST...>{});
+                } else {
+                    using ReturnType = Tensor<decltype(T() * T2()), D1_REST..., D2_REST...>;
 
                     return ReturnType{};
                 }
-            }(meta::List<DIMS...>{}, meta::List<DIMS2...>{}, {});
+            }.template operator()<sizeof...(DIMS) - CONTRACTIONS>(meta::List<DIMS...>{}, meta::List<DIMS2...>{});
         }
 
         // template<class OTHERCLASS, typename T2, std::size_t... DIMS2> requires([](std::size_t (&&d1)[sizeof...(DIMS)], std::size_t (&&d2)[sizeof...(DIMS2)]){

@@ -1,4 +1,5 @@
-import std;
+#include <iostream>
+#include <cstddef>
 
 import linalg;
 
@@ -49,6 +50,8 @@ namespace {
         // std::cout << m1 << "\n" << std::endl;
         // std::cout << m2 << "\n" << std::endl;
         std::cout << LINE_EVAL(m1 * m2) << std::endl;
+        // std::cout << STR_EVAL(m1.contract<1uz>(m2).shape()) << std::endl;
+        // std::cout << STR_EVAL(m1.contract<1uz>(m2)) << std::endl;
 
         static float reallyLongArray[] = { -1.0f, -3.0f, 0.0f, 1.0f, 4.2f, 3.9f, -33.0f, 0.003f, 14.0f, 0.0f, 0.0f, 22.0f };
         [[maybe_unused]]
@@ -148,7 +151,7 @@ namespace {
                                 {213,214,215} } } } } }
         };
 
-        std::cout << STR_EVAL(sizeof(h1)) << " bytes\n" STR_EVAL(h1.count()) << "\n" LINE_EVAL(h1) << "\n" << std::endl;
+        //std::cout << STR_EVAL(sizeof(h1)) << " bytes\n" STR_EVAL(h1.count()) << "\n" LINE_EVAL(h1) << "\n" << std::endl;
 
         std::cout << LINE_EVAL(h1[0, '*', 1, 0]) << std::endl;
         std::cout << "Incrementing all values in slice 'h1[0, '*', 1, 0]'" << std::endl;
@@ -163,25 +166,33 @@ namespace {
         std::cout << STR_EVAL(++h1['*', '*', '*', '*', '*', 1]['*', '*', '*', '*', 0]['*', '*', '*', 0]['*', '*', 1]['*', 2][0]) << std::endl;
 
         [[maybe_unused]]
-        constexpr linalg::Tensor<double, 2uz, 2uz, 3uz, 4uz> h2 {
+        constexpr linalg::Tensor<double, 2uz, 4uz, 2uz, 4uz> h2 {
             0,  1,  2,  3,
             4,  5,  6,  7,
             8,  9, 10, 11,
-                12, 13, 14, 15,
+            12, 13, 14, 15,
                 16, 17, 18, 19,
                 20, 21, 22, 23,
-            24, 25, 26, 27,
-            28, 29, 30, 31,
+                24, 25, 26, 27,
+                28, 29, 30, 31,
             32, 33, 34, 35,
-                36, 37, 38, 39,
-                40, 41, 42, 43,
-                44, 45, 46, 47,
+            36, 37, 38, 39,
+            40, 41, 42, 43,
+            44, 45, 46, 47,
+                48, 49, 50, 51,
+                52, 53, 54, 55,
+                56, 57, 58, 59,
+                60, 61, 62, 47,
         };
 
         [[maybe_unused]]
-        constexpr auto h3 = linalg::Tensor<int, 4uz, 3uz, 2uz, 5uz>::broadcast(1);
+        constexpr auto h3 = linalg::Tensor<int, 4uz, 2uz, 4uz, 2uz>::broadcast(1);
 
-        //std::cout << LINE_EVAL(h2.contract<3uz>(h3)) << "\n" LINE_EVAL(h2.contract<2uz>(h3)) << std::endl;
+        std::cout << STR_EVAL(h2.shape()) << std::endl;
+        std::cout << STR_EVAL(h3.shape()) << std::endl;
+        // std::cout << STR_EVAL(h2.contract<1uz>(h3).shape()) << std::endl;
+        // std::cout << STR_EVAL(h2.contract<2uz>(h3).shape()) << std::endl;
+        // std::cout << STR_EVAL(h2.contract<3uz>(h3).shape()) << std::endl;
 
         // Test for compile-time evaluation
         static_assert(h2['*', 1][0, '*', 2][2] > 0.0);
