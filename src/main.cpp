@@ -1,7 +1,9 @@
 #include <iostream>
+#include <print>
 #include <cstddef>
 
 import linalg;
+import meta;
 
 #define STR_EVAL(...) #__VA_ARGS__ " => " << __VA_ARGS__
 #define LINE_EVAL(...) #__VA_ARGS__ " =\n" << __VA_ARGS__
@@ -205,7 +207,18 @@ namespace {
 int main() {
     // ::testVectors();
     // ::testMatrices();
-    ::testHigherDims();
+    // ::testHigherDims();
+
+    //int d0 = 0;
+    int d1[] = { 0, 1 };
+    int d2[][2] = { { 0, 1 }, { 2, 3 }, { 4, 5 } };
+    int d3[][2][2] = { { { 0, 1 }, { 2, 3 } }, { { 4, 5 }, { 6, 7 } } };
+    int d4[][2][1][3] = { { { { 0, 1, 2 } }, { { 3, 4, 5 } } } };
+
+    std::println("{}", meta::ArrayShape<decltype(d1)>::value);
+    std::println("{}", meta::ArrayShape<decltype(d2)>::value);
+    std::println("{}", meta::ArrayShape<decltype(d3)>::value);
+    std::println("{}", meta::ArrayShape<decltype(d4)>::value);
 
     return 0;
 }

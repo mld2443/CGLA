@@ -1,5 +1,4 @@
 cmake_minimum_required(VERSION 4.0)
-
 project(CGLA LANGUAGES CXX)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")

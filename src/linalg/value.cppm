@@ -8,18 +8,8 @@ export module linalg:value;
 import meta;
 
 namespace linalg {
-    // Value type recursive primary template
-    template <typename T, std::size_t COUNT, std::size_t DIM = 0uz, std::size_t... REST>
-    class RecursiveValueClass : RecursiveValueClass<T, COUNT, REST...> {
-        using Base = RecursiveValueClass<T, COUNT, REST...>;
-    protected:
-        using NestedArray = typename Base::NestedArray[DIM];
-        using Base::data;
-
-    public:
-        constexpr RecursiveValueClass(NestedArray&& payload) : Base(std::forward<typename Base::NestedArray>(*payload)) {}
-        constexpr RecursiveValueClass(auto&&... payload) : Base(std::forward<T>(payload)...) {}
-    };
+    template <typename T, std::size_t COUNT, std::size_t... REST>
+    class RecursiveValueClass;
 
     // Value type recursive base-case class partial template specialization
     template <typename T, std::size_t COUNT>
@@ -36,6 +26,19 @@ namespace linalg {
         constexpr RecursiveValueClass(auto&&... payload) : data{ std::forward<T>(payload)... } {}
 
         T data[COUNT];
+    };
+
+    // Value type recursive primary template
+    template <typename T, std::size_t COUNT, std::size_t DIM, std::size_t... REST>
+    class RecursiveValueClass<T, COUNT, DIM, REST...> : RecursiveValueClass<T, COUNT, REST...> {
+        using Base = RecursiveValueClass<T, COUNT, REST...>;
+    protected:
+        using NestedArray = typename Base::NestedArray[DIM];
+        using Base::data;
+
+    public:
+        constexpr RecursiveValueClass(NestedArray&& payload) : Base(std::forward<typename Base::NestedArray>(*payload)) {}
+        constexpr RecursiveValueClass(auto&&... payload) : Base(std::forward<T>(payload)...) {}
     };
 
     // Top-level Value-type class

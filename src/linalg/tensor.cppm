@@ -16,18 +16,6 @@ export import :pointer;
 export import :value;
 
 
-// Helper macros to reduce clutter
-#if defined(__GNUC__) || defined(__clang__)
-#define DISABLE_UNUSED_WARNING _Pragma("GCC diagnostic push") _Pragma("GCC diagnostic ignored \"-Wunused-value\"")
-#define RESTORE_UNUSED_WARNING _Pragma("GCC diagnostic pop")
-#elif defined(_MSC_VER)
-#define DISABLE_UNUSED_WARNING __pragma(warning(push)) __pragma(warning(disable: 4101))
-#define RESTORE_UNUSED_WARNING __pragma(warning(pop))
-#else
-#define DISABLE_UNUSED_WARNING
-#define RESTORE_UNUSED_WARNING
-#endif
-
 namespace linalg {
     template <class STORAGEBASE, typename T, std::size_t... DIMS>
     struct TensorType;
@@ -116,27 +104,25 @@ namespace linalg {
         // Constructors
         using STORAGECLASS::STORAGECLASS;
         static constexpr auto broadcast(T&& s) { return [&]<std::size_t... IDX>(meta::List<IDX...>&&) constexpr {
-            DISABLE_UNUSED_WARNING
-            return TensorType<STORAGECLASS, T, DIMS...>{ (IDX, s)... };
-            RESTORE_UNUSED_WARNING
+            return TensorType<STORAGECLASS, T, DIMS...>{ ((void)IDX, s)... };
         }(meta::sequenceList<COUNT>()); }
 
         // Iterator for for-each loops
         template <class QUALIFIEDTYPE>
-        struct Iterator {
+        struct FwdIterator {
         public:
-            constexpr Iterator(QUALIFIEDTYPE& ref, std::size_t offset = 0uz) : ref(ref), pos(offset) {}
+            constexpr FwdIterator(QUALIFIEDTYPE& ref, std::size_t offset = 0uz) : ref(ref), pos(offset) {}
 
             constexpr decltype(auto) operator*() const { return ref.get(pos); }
             constexpr auto operator++() { ++pos; return *this; }
-            constexpr bool operator==(const Iterator& o) const { return pos == o.pos; }
+            constexpr bool operator==(const FwdIterator& o) const { return pos == o.pos; }
 
         private:
             QUALIFIEDTYPE& ref;
             std::size_t pos;
         };
-        constexpr auto begin(this auto& self) { return Iterator<decltype(self)>{ self }; }
-        constexpr auto   end(this auto& self) { return Iterator<decltype(self)>{ self , COUNT }; }
+        constexpr auto begin(this auto& self) { return FwdIterator<decltype(self)>{ self }; }
+        constexpr auto   end(this auto& self) { return FwdIterator<decltype(self)>{ self , COUNT }; }
 
         // Metadata
         static constexpr std::size_t count() { return COUNT; }
