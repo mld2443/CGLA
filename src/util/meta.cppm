@@ -10,25 +10,41 @@ export module meta;
 // Template Metaprogramming
 export namespace meta {
     template <class, std::size_t... DIMS>
-    struct ArrayShape {
+    struct ArrayTraits {
         static constexpr std::size_t RANK = sizeof...(DIMS);
-        static constexpr std::size_t VALUE[] = { DIMS... };
+        static constexpr std::size_t SHAPE[] = { DIMS... };
+        static constexpr std::size_t COUNT = (DIMS * ...);
     };
 
     template<class T, std::size_t N, std::size_t... DIMS>
-    struct ArrayShape<T[N], DIMS...> : ArrayShape<T, DIMS..., N> { using Base = ArrayShape<T, DIMS..., N>; using Base::RANK; using Base::VALUE; };
+    struct ArrayTraits<T[N], DIMS...> : ArrayTraits<T, DIMS..., N> {
+        using Base = ArrayTraits<T, DIMS..., N>;
+        using Base::RANK;
+        using Base::SHAPE;
+        using Base::COUNT;
+    };
 
     template<class T>
-    struct ArrayShape<T[]> : ArrayShape<T, 0uz> { using Base = ArrayShape<T, 0uz>; using Base::RANK; using Base::VALUE; };
+    struct ArrayTraits<T[]> : ArrayTraits<T, 0uz> {
+        using Base = ArrayTraits<T, 0uz>;
+        using Base::RANK;
+        using Base::SHAPE;
+        using Base::COUNT;
+    };
 
     template <typename T1, typename T2>
     using copyConst = std::conditional_t<std::is_const_v<std::remove_reference_t<T1>>, const T2, T2>;
 
     template <auto... Xs>
-    struct List { static constexpr std::size_t COUNT = sizeof...(Xs); };
+    struct List {
+        static constexpr std::size_t COUNT = sizeof...(Xs);
+    };
 
     template <char... Cs>
-    struct String { static constexpr char STR[] = {Cs..., '\0'}; };
+    struct String {
+        static constexpr std::size_t LENGTH = sizeof...(Cs);
+        static constexpr char STR[] = {Cs..., '\0'};
+    };
 
     template <std::size_t SIZE>
     consteval auto sequenceList() {
