@@ -10,16 +10,16 @@ export module meta;
 // Template Metaprogramming
 export namespace meta {
     template <class, std::size_t... DIMS>
-    struct ArrayShape { static constexpr std::size_t value[] = { DIMS... }; };
+    struct ArrayShape {
+        static constexpr std::size_t RANK = sizeof...(DIMS);
+        static constexpr std::size_t VALUE[] = { DIMS... };
+    };
 
     template<class T, std::size_t N, std::size_t... DIMS>
-    struct ArrayShape<T[N], DIMS...> : ArrayShape<T, DIMS..., N> { using ArrayShape<T, DIMS..., N>::value; };
+    struct ArrayShape<T[N], DIMS...> : ArrayShape<T, DIMS..., N> { using Base = ArrayShape<T, DIMS..., N>; using Base::RANK; using Base::VALUE; };
 
     template<class T>
-    struct ArrayShape<T[]> : ArrayShape<T, 0uz> { using ArrayShape<T, 0uz>::value; };
-
-    template <class T>
-    using ArrayShapeV = ArrayShape<T>::value;
+    struct ArrayShape<T[]> : ArrayShape<T, 0uz> { using Base = ArrayShape<T, 0uz>; using Base::RANK; using Base::VALUE; };
 
     template <typename T1, typename T2>
     using copyConst = std::conditional_t<std::is_const_v<std::remove_reference_t<T1>>, const T2, T2>;

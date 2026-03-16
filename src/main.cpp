@@ -215,10 +215,10 @@ int main() {
     int d3[][2][2] = { { { 0, 1 }, { 2, 3 } }, { { 4, 5 }, { 6, 7 } } };
     int d4[][2][1][3] = { { { { 0, 1, 2 } }, { { 3, 4, 5 } } } };
 
-    std::println("{}", meta::ArrayShape<decltype(d1)>::value);
-    std::println("{}", meta::ArrayShape<decltype(d2)>::value);
-    std::println("{}", meta::ArrayShape<decltype(d3)>::value);
-    std::println("{}", meta::ArrayShape<decltype(d4)>::value);
+    std::println("{}", meta::ArrayShape<decltype(d1)>::VALUE);
+    std::println("{}", meta::ArrayShape<decltype(d2)>::VALUE);
+    std::println("{}", meta::ArrayShape<decltype(d3)>::VALUE);
+    std::println("{}", meta::ArrayShape<decltype(d4)>::VALUE);
 
     return 0;
 }
