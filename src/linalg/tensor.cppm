@@ -31,7 +31,11 @@ namespace linalg {
     using Vector = TensorType<StorageType, T, N>;
     export template <typename T, std::size_t N, std::ptrdiff_t STRIDE = 1z>
     using VectorPtr = TensorType<PointerClass<T, N, STRIDE>, T, N>;
+}
 
+//module :private; // lambdas having internal linkage causes errors and crashes clang!
+
+namespace linalg {
     // Concepts for dimension-dependant specializations
     template <class C> concept isVector = requires { C::order(); } && C::order() == 1uz;
     template <class C> concept isMatrix = requires { C::order(); } && C::order() == 2uz;
@@ -290,7 +294,7 @@ namespace linalg {
 
         template <std::size_t N> requires(N > 1uz)
         constexpr T determinant(this const Matrix<T, N, N, STORAGECLASS>&) {
-            return T(); //FIXME
+            return T(); //TODO
         }
 
         template<typename T2, std::size_t M, std::size_t N, std::size_t O, class OTHERCLASS>
