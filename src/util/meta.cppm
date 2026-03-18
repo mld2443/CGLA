@@ -2,7 +2,7 @@ module;
 
 #include <cstddef>     // size_t
 #include <type_traits> // conditional_t, remove_reference_t
-#include <utility>     // forward, index_sequence, make_index_sequence
+#include <utility>     // index_sequence, make_index_sequence
 
 export module meta;
 
@@ -10,26 +10,40 @@ export module meta;
 // Template Metaprogramming
 export namespace meta {
     template <class, std::size_t... DIMS>
+    struct ArrayTraits;
+
+    template <class T, std::size_t... DIMS>
     struct ArrayTraits {
-        static constexpr std::size_t RANK = sizeof...(DIMS);
+        static constexpr bool        ISARRAY = true;
+        static constexpr std::size_t    RANK = sizeof...(DIMS);
+        static constexpr std::size_t   COUNT = (DIMS * ...);
         static constexpr std::size_t SHAPE[] = { DIMS... };
-        static constexpr std::size_t COUNT = (DIMS * ...);
     };
 
     template<class T, std::size_t N, std::size_t... DIMS>
     struct ArrayTraits<T[N], DIMS...> : ArrayTraits<T, DIMS..., N> {
         using Base = ArrayTraits<T, DIMS..., N>;
+        using Base::ISARRAY;
         using Base::RANK;
-        using Base::SHAPE;
         using Base::COUNT;
+        using Base::SHAPE;
     };
 
     template<class T>
     struct ArrayTraits<T[]> : ArrayTraits<T, 0uz> {
         using Base = ArrayTraits<T, 0uz>;
+        using Base::ISARRAY;
         using Base::RANK;
-        using Base::SHAPE;
         using Base::COUNT;
+        using Base::SHAPE;
+    };
+
+    template <class T>
+    struct ArrayTraits<T> {
+        static constexpr bool        ISARRAY = false;
+        static constexpr std::size_t    RANK = 0uz;
+        static constexpr std::size_t   COUNT = 1uz;
+        static constexpr std::size_t SHAPE[] = { 0uz };
     };
 
     template <typename T1, typename T2>

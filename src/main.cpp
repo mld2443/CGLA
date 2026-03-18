@@ -1,6 +1,6 @@
+#include <cstddef>
 #include <iostream>
 #include <print>
-#include <cstddef>
 
 import linalg;
 import meta;
@@ -201,6 +201,7 @@ namespace {
     }
 }
 
+
 //////////
 // MAIN //
 //////////
@@ -209,16 +210,23 @@ int main() {
     // ::testMatrices();
     // ::testHigherDims();
 
-    //int d0 = 0;
+    int d0 = 0;
     int d1[] = { 0, 1 };
     int d2[][2] = { { 0, 1 }, { 2, 3 }, { 4, 5 } };
     int d3[][2][2] = { { { 0, 1 }, { 2, 3 } }, { { 4, 5 }, { 6, 7 } } };
     int d4[][2][1][3] = { { { { 0, 1, 2 } }, { { 3, 4, 5 } } } };
 
-    std::println("{}, {}", meta::ArrayTraits<decltype(d1)>::COUNT, meta::ArrayTraits<decltype(d1)>::SHAPE);
-    std::println("{}, {}", meta::ArrayTraits<decltype(d2)>::COUNT, meta::ArrayTraits<decltype(d2)>::SHAPE);
-    std::println("{}, {}", meta::ArrayTraits<decltype(d3)>::COUNT, meta::ArrayTraits<decltype(d3)>::SHAPE);
-    std::println("{}, {}", meta::ArrayTraits<decltype(d4)>::COUNT, meta::ArrayTraits<decltype(d4)>::SHAPE);
+    using d0traits = meta::ArrayTraits<decltype(d0)>;
+    using d1traits = meta::ArrayTraits<decltype(d1)>;
+    using d2traits = meta::ArrayTraits<decltype(d2)>;
+    using d3traits = meta::ArrayTraits<decltype(d3)>;
+    using d4traits = meta::ArrayTraits<decltype(d4)>;
+
+    std::println("d0= {}\nArray? {}, RANK:{}, COUNT:{}, SHAPE:{}", d0, d0traits::ISARRAY, d0traits::RANK, d0traits::COUNT, d0traits::SHAPE);
+    std::println("d1= {}\nArray? {}, RANK:{}, COUNT:{}, SHAPE:{}", d1, d1traits::ISARRAY, d1traits::RANK, d1traits::COUNT, d1traits::SHAPE);
+    std::println("d2= {}\nArray? {}, RANK:{}, COUNT:{}, SHAPE:{}", d2, d2traits::ISARRAY, d2traits::RANK, d2traits::COUNT, d2traits::SHAPE);
+    std::println("d3= {}\nArray? {}, RANK:{}, COUNT:{}, SHAPE:{}", d3, d3traits::ISARRAY, d3traits::RANK, d3traits::COUNT, d3traits::SHAPE);
+    std::println("d4= {}\nArray? {}, RANK:{}, COUNT:{}, SHAPE:{}", d4, d4traits::ISARRAY, d4traits::RANK, d4traits::COUNT, d4traits::SHAPE);
 
     return 0;
 }
