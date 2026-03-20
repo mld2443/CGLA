@@ -9,9 +9,7 @@ export module meta;
 
 // Template Metaprogramming
 export namespace meta {
-    template <class, std::size_t... DIMS>
-    struct ArrayTraits;
-
+    // Base class
     template <class T, std::size_t... DIMS>
     struct ArrayTraits {
         static constexpr bool        ISARRAY = true;
@@ -20,6 +18,7 @@ export namespace meta {
         static constexpr std::size_t SHAPE[] = { DIMS... };
     };
 
+    // Recursive class
     template<class T, std::size_t N, std::size_t... DIMS>
     struct ArrayTraits<T[N], DIMS...> : ArrayTraits<T, DIMS..., N> {
         using Base = ArrayTraits<T, DIMS..., N>;
@@ -29,6 +28,7 @@ export namespace meta {
         using Base::SHAPE;
     };
 
+    // Specialization for unbounded arrays
     template<class T>
     struct ArrayTraits<T[]> : ArrayTraits<T, 0uz> {
         using Base = ArrayTraits<T, 0uz>;
@@ -38,6 +38,7 @@ export namespace meta {
         using Base::SHAPE;
     };
 
+    // Specialization for non-arrays
     template <class T>
     struct ArrayTraits<T> {
         static constexpr bool        ISARRAY = false;
