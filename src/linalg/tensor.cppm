@@ -87,14 +87,14 @@ namespace linalg {
             if constexpr (DIMSREMAINING % 3uz == 0uz)
                 (prettyPrint<STEP / NEXTDIM, NEXTDIM, RESTDIMS...>(
                     os,
-                    meta::sequenceList<NEXTDIM>(),
+                    meta::iotaList<NEXTDIM>(),
                     offset + IDX * STEP,
                     meta::repeatedList<(DIMSREMAINING > 3uz ? DIMSREMAINING - 3uz : 3uz) * IDX, ' ', meta::String>()
                 ), ...);
             else if constexpr (NEXTDIM)
                 (prettyPrint<STEP / NEXTDIM, NEXTDIM, RESTDIMS...>(
                     os,
-                    meta::sequenceList<NEXTDIM>(),
+                    meta::iotaList<NEXTDIM>(),
                     offset + IDX * STEP,
                     meta::String<STR...>{}
                 ), ...);
@@ -109,7 +109,7 @@ namespace linalg {
         using STORAGECLASS::STORAGECLASS;
         static constexpr auto broadcast(T&& s) { return [&]<std::size_t... IDX>(meta::List<IDX...>&&) constexpr {
             return TensorType<STORAGECLASS, T, DIMS...>{ ((void)IDX, s)... };
-        }(meta::sequenceList<COUNT>()); }
+        }(meta::iotaList<COUNT>()); }
 
         // Iterator for for-each loops
         template <class QUALIFIEDTYPE>
@@ -137,27 +137,27 @@ namespace linalg {
         constexpr auto map(auto&& func) const {
             return [this]<std::size_t... IDX>(auto& func, meta::List<IDX...>&&) constexpr {
                 return Tensor<decltype(func(T())), DIMS...>{ func(get(IDX))... };
-            }(func, meta::sequenceList<COUNT>());
+            }(func, meta::iotaList<COUNT>());
         }
         constexpr auto binaryMap(auto&& func, const auto& t) const {
             return [this]<class OTHERCLASS, typename T2, std::size_t... IDX>(auto& func, const TensorType<OTHERCLASS, T2, DIMS...>& t, meta::List<IDX...>&&) constexpr {
                 return Tensor<decltype(func(T(), T2())), DIMS...>{ func(get(IDX), t.get(IDX))... };
-            }(func, t, meta::sequenceList<COUNT>());
+            }(func, t, meta::iotaList<COUNT>());
         }
         inline void mapWrite(auto&& func) {
             [this]<std::size_t... IDX>(auto& func, meta::List<IDX...>&&) constexpr {
                 (func(get(IDX)), ...);
-            }(func, meta::sequenceList<COUNT>());
+            }(func, meta::iotaList<COUNT>());
         }
         inline void binaryMapWrite(auto&& func, const auto& t) {
             [this]<class OTHERCLASS, typename T2, std::size_t... IDX>(auto& func, const TensorType<OTHERCLASS, T2, DIMS...>& t, meta::List<IDX...>&&) constexpr {
                 (func(get(IDX), t.get(IDX)), ...);
-            }(func, t, meta::sequenceList<COUNT>());
+            }(func, t, meta::iotaList<COUNT>());
         }
         constexpr auto reduce(auto&& func, auto starting) const {
             return [this]<std::size_t... IDX>(auto& func, auto starting, meta::List<IDX...>&&) constexpr {
                 return ((starting = func(starting, get(IDX))), ...);
-            }(func, starting, meta::sequenceList<COUNT>());
+            }(func, starting, meta::iotaList<COUNT>());
         }
         constexpr auto reduce(auto&& func) const {
             if constexpr (COUNT == 1uz)
@@ -165,7 +165,7 @@ namespace linalg {
             else
                 return [this]<std::size_t... IDX>(auto& func, T starting, meta::List<IDX...>&&) constexpr {
                     return ((starting = func(starting, get(1uz + IDX))), ...);
-                }(func, get(0uz), meta::sequenceList<COUNT - 1uz>());
+                }(func, get(0uz), meta::iotaList<COUNT - 1uz>());
         }
 
         // Member operator overloads
@@ -285,7 +285,7 @@ namespace linalg {
         static constexpr auto Identity() requires(order() == 2uz) {
             return []<std::size_t M, std::size_t N, std::size_t... IDX>(meta::List<IDX...>&&) constexpr requires(M == N) {
                 return Matrix<T, M, N>{ T((IDX % (M + 1uz)) == 0uz)... };
-            }.template operator()<DIMS...>(meta::sequenceList<COUNT>());
+            }.template operator()<DIMS...>(meta::iotaList<COUNT>());
         }
 
         // Matrix specific accessors
@@ -301,7 +301,7 @@ namespace linalg {
         constexpr auto operator*(this const Matrix<T, M, N, STORAGECLASS>& self, const Matrix<T2, N, O, OTHERCLASS>& m) {
             return []<std::size_t... IDX>(const auto& m1, const auto& m2, meta::List<IDX...>&&) constexpr {
                 return Matrix<decltype(T()*T2()), M, O>{ m1.getRow(IDX / O).dot(m2.getCol(IDX % O))... };
-            }(self, m, meta::sequenceList<M*O>());
+            }(self, m, meta::iotaList<M*O>());
         }
     };
 
@@ -312,7 +312,7 @@ namespace linalg {
     constexpr auto operator/(const nonArray auto& s, const TensorType<STORAGETYPE, T, DIMS...> &t) { return t.map([&s](const T& e) { return s / e; }); }
     template <class STORAGETYPE, typename T, std::size_t FIRSTDIM, std::size_t... RESTDIMS>
     constexpr std::ostream& operator<<(std::ostream& os, const TensorType<STORAGETYPE, T, FIRSTDIM, RESTDIMS...>& t) {
-        t.template prettyPrint<(RESTDIMS * ... * 1uz), FIRSTDIM, RESTDIMS...>(os, meta::sequenceList<FIRSTDIM>());
+        t.template prettyPrint<(RESTDIMS * ... * 1uz), FIRSTDIM, RESTDIMS...>(os, meta::iotaList<FIRSTDIM>());
         return os;
     }
 }

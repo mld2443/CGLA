@@ -206,66 +206,77 @@ namespace {
 // EXPERIMENTAL //
 //////////////////
 namespace {
-    // { 0 1 2 3 }
-    // Flattened<int[4], , >[3] => self.ref[3];
-    // {{  0  1  2  3 }
-    //  {  4  5  6  7 }
-    //  {  8  9 10 11 }}
-    // Flattened<Flattened<int[4], 4, 0>, 3, 0>[5] => self.ref(5/4)[5%4] => self.ref[1];
-    // {{{  0  1  2  3 }
-    //   {  4  5  6  7 }
-    //   {  8  9 10 11 }}
-    //  {{ 12 13 14 15 }
-    //   { 16 17 18 19 }
-    //   { 20 21 22 23 }}}
-    // Flattened<Flattened<Flattened<int[4], 4, 0>, 3, 4>, 2, 12>[5] => self.ref(5/12)[5%12] => self.ref(5/4)[5%4] => self.ref[1];
-
     ///////////////////////
     // RecursiveAccessor //
     ///////////////////////
     template <typename T, std::size_t... DIMS>
-    struct RecursiveAccessor;
-
-    template <typename T, std::size_t... DIMS> requires(sizeof...(DIMS) > 0uz)
-    struct RecursiveAccessor<T, DIMS...> {
-        using UnderlyingType = T;
+    struct RecursiveAccessor {
+        using NestedType = T;
         static constexpr std::size_t STEP = 1uz;
         static constexpr std::size_t COUNT = (DIMS * ...);
 
-        static constexpr UnderlyingType& lookup(UnderlyingType& x, std::size_t) { return x; }
+        static constexpr decltype(auto) lookup(auto& x, std::size_t) { return x; }
     };
 
     template<typename T, std::size_t N, std::size_t... DIMS>
     struct RecursiveAccessor<T[N], DIMS...> : RecursiveAccessor<T, DIMS..., N> {
         using Base = RecursiveAccessor<T, DIMS..., N>;
-        using UnderlyingType = typename Base::UnderlyingType;
+        using NestedType = typename Base::NestedType[N];
         using Base::COUNT;
 
     protected:
         static constexpr std::size_t STEP = N * Base::STEP;
-        static constexpr UnderlyingType& lookup(T (&x)[N], std::size_t i) {
-            return Base::lookup(x[i / Base::STEP], i % Base::STEP);
-        }
+
+        static constexpr decltype(auto) lookup(auto (&x)[N], std::size_t i) { return Base::lookup(x[i / Base::STEP], i % Base::STEP); }
     };
 
     template <typename T>
     struct FlattenedArray : RecursiveAccessor<T> {
-    protected:
+    private:
         using Base = RecursiveAccessor<T>;
 
     public:
-        using UnderlyingType = typename Base::UnderlyingType;
         using Base::COUNT;
 
-        constexpr FlattenedArray(T &data) : m_data(&data) {}
+        constexpr FlattenedArray(T& data) : m_data(&data) {}
 
-        constexpr UnderlyingType& deref(std::size_t i) const {
-            return Base::lookup(*m_data, i);
-        }
+        constexpr decltype(auto) deref(std::size_t i) const { return Base::lookup(*m_data, i); }
 
     private:
         T* m_data;
     };
+
+    template <typename T>
+    struct FlattenedCopy : RecursiveAccessor<T> {
+    private:
+        using Base = RecursiveAccessor<T>;
+
+        template <std::size_t... IDX>
+        constexpr FlattenedCopy(meta::List<IDX...>&&, T& data) : Base(), m_data{ Base::lookup(data, IDX)... } {}
+
+    public:
+        using Base::COUNT;
+
+        constexpr FlattenedCopy(T&& data) : FlattenedCopy(meta::iotaList<COUNT>(), data) {}
+
+        constexpr decltype(auto) deref(std::size_t i) const {
+            return Base::lookup(m_data, i);
+        }
+
+    private:
+        T m_data;
+    };
+
+    template <typename T, std::size_t N0>
+    FlattenedCopy(T (&&)[N0]) -> FlattenedCopy<T[N0]>;
+    template <typename T, std::size_t N0, std::size_t N1>
+    FlattenedCopy(T (&&)[N0][N1]) -> FlattenedCopy<T[N0][N1]>;
+    template <typename T, std::size_t N0, std::size_t N1, std::size_t N2>
+    FlattenedCopy(T (&&)[N0][N1][N2]) -> FlattenedCopy<T[N0][N1][N2]>;
+    template <typename T, std::size_t N0, std::size_t N1, std::size_t N2, std::size_t N3>
+    FlattenedCopy(T (&&)[N0][N1][N2][N3]) -> FlattenedCopy<T[N0][N1][N2][N3]>;
+    template <typename T, std::size_t N0, std::size_t N1, std::size_t N2, std::size_t N3, std::size_t N4>
+    FlattenedCopy(T (&&)[N0][N1][N2][N3][N4]) -> FlattenedCopy<T[N0][N1][N2][N3][N4]>;
 }
 
 
@@ -273,25 +284,18 @@ namespace {
 // MAIN //
 //////////
 int main() {
-    //static constexpr int d0 = -1;
-    static constexpr int d1[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 };
-    static constexpr int d2[][4] = { { 0, 1, 2, 3 }, { 4, 5, 6, 7, }, { 8, 9, 10, 11 } };
-    static constexpr int d3[][2][2] = { { { 0, 1 }, { 2, 3 } }, { { 4, 5 }, { 6, 7 } }, { { 8, 9 }, { 10, 11 } } };
-    static constexpr int d4[][2][1][3] = { { { { 0, 1, 2 } }, { { 3, 4, 5 } } } };
+    constexpr FlattenedCopy fc1 { { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 } };
+    constexpr FlattenedCopy fc2 { { { 0, 1, 2, 3 }, { 4, 5, 6, 7, }, { 8, 9, 10, 11 } } };
+    constexpr FlattenedCopy fc3 { { { { 0, 1 }, { 2, 3 } }, { { 4, 5 }, { 6, 7 } }, { { 8, 9 }, { 10, 11 } } } };
+    constexpr FlattenedCopy fc4 { { { { { 0, 1 }, { 2, 3 } }, { { 4, 5 }, { 6, 7 } }, { { 8, 9 }, { 10, 11 } } } } };
 
-    //constexpr FlattenedArray c0 { d0 };
-    constexpr FlattenedArray c1 { d1 };
-    constexpr FlattenedArray c2 { d2 };
-    constexpr FlattenedArray c3 { d3 };
-    constexpr FlattenedArray c4 { d4 };
+    static_assert(fc3.deref(11uz) == 11uz);
 
-    static_assert(c3.deref(11uz) == 11uz);
-
-    //std::println(" {}", c0.deref(0uz));
-    std::println(" {}", c1.deref(11uz));
-    std::println(" {}", c2.deref(11uz));
-    std::println(" {}", c3.deref(11uz));
-    std::println(" {}", c4.deref(5uz));
+    //std::println("{}", c0.deref(0uz));
+    std::println("{}", fc1.deref(11uz));
+    std::println("{}", fc2.deref(11uz));
+    std::println("{}", fc3.deref(11uz));
+    std::println("{}", fc4.deref(5uz));
 
     return 0;
 }

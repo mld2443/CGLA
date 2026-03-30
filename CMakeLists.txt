@@ -6,6 +6,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         -Wall -Wextra -Wpedantic
         -Wconversion -Wsign-conversion
         -Wno-missing-field-initializers
+        -Wno-missing-braces
     )
 elseif(MSVC)
     add_compile_options(/W4 /permissive-)

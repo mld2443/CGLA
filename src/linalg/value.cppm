@@ -22,7 +22,7 @@ namespace linalg {
         constexpr RecursiveValueClass(meta::List<IDX...>&&, NestedArray* first) : data{ first[IDX]... } {}
 
     protected:
-        constexpr RecursiveValueClass(NestedArray&& first) : RecursiveValueClass(meta::sequenceList<COUNT>(), &first) {}
+        constexpr RecursiveValueClass(NestedArray&& first) : RecursiveValueClass(meta::iotaList<COUNT>(), &first) {}
         constexpr RecursiveValueClass(auto&&... payload) : data{ std::forward<T>(payload)... } {}
 
         T data[COUNT];
@@ -52,7 +52,6 @@ namespace linalg {
 
     protected:
         using Base::Base;
-        using Base::data;
 
         constexpr decltype(auto) get(this auto&& self, std::size_t i) { return *(self.data + i); }
     };

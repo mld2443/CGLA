@@ -62,7 +62,7 @@ export namespace meta {
     };
 
     template <std::size_t SIZE>
-    consteval auto sequenceList() {
+    consteval auto iotaList() {
         return []<std::size_t... IDX>(std::index_sequence<IDX...>&&) consteval {
             return List<IDX...>{};
         }(std::make_index_sequence<SIZE>{});
